@@ -1,34 +1,55 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { CategoriesScreen } from './components/CategoriesScreen';
 import { ExerciseListScreen } from './components/ExerciseListScreen';
 import { ExerciseDetailScreen } from './components/ExerciseDetailScreen';
+import { AddExerciseScreen } from './components/AddExerciseScreen';
 import type { Category, Exercise } from './types';
 
-type Screen = 'categories' | 'exercises' | 'exercise-detail';
+type Screen = 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('categories');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
 
   const sessionId = useMemo(() => `session_${Date.now()}`, []);
 
-  const openCategories = () => {
+  const openCategories = useCallback(() => {
     setScreen('categories');
     setSelectedCategory(null);
     setSelectedExercise(null);
-  };
+  }, []);
 
-  const openExercises = (category: Category) => {
+  const openExercises = useCallback((category: Category) => {
     setSelectedCategory(category);
     setScreen('exercises');
     setSelectedExercise(null);
-  };
+  }, []);
 
-  const openExerciseDetail = (exercise: Exercise) => {
+  const openExerciseDetail = useCallback((exercise: Exercise) => {
     setSelectedExercise(exercise);
     setScreen('exercise-detail');
-  };
+  }, []);
+
+  const openAddExercise = useCallback(() => {
+    setScreen('add-exercise');
+  }, []);
+
+  const onExerciseAdded = useCallback(() => {
+    setScreen('exercises');
+    setExercisesRefreshTrigger((t) => t + 1);
+  }, []);
+
+  if (screen === 'add-exercise' && selectedCategory) {
+    return (
+      <AddExerciseScreen
+        category={selectedCategory}
+        onBack={() => setScreen('exercises')}
+        onSuccess={onExerciseAdded}
+      />
+    );
+  }
 
   if (screen === 'exercise-detail' && selectedExercise) {
     return (
@@ -45,8 +66,10 @@ export default function App() {
     return (
       <ExerciseListScreen
         category={selectedCategory}
+        refreshTrigger={exercisesRefreshTrigger}
         onBack={openCategories}
         onSelectExercise={openExerciseDetail}
+        onAddExercise={openAddExercise}
       />
     );
   }

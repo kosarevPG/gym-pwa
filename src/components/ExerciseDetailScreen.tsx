@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ChevronLeft, Trophy, Calendar, FolderDown, Trash2, Plus } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
-import { supabase } from '../lib/supabase';
+import { saveTrainingLogs } from '../lib/api';
 import { WEIGHT_FORMULAS, getWeightInputType, allows1rm } from '../exerciseConfig';
 import { calc1RM } from '../utils';
 import type { Exercise as ExerciseType, WorkoutSet } from '../types';
@@ -44,6 +44,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
   ]);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const weightType = getWeightType(exercise);
   const weightLabel = WEIGHT_FORMULAS[weightType]?.label ?? '×1 блин';
   const show1rm = allows1rm(weightType);
@@ -69,6 +70,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
   }, []);
 
   const handleComplete = async () => {
+    setSaveError(null);
     setSaving(true);
     const toInsert = sets
       .filter((s) => s.inputWeight.trim() !== '' || s.reps.trim() !== '')
@@ -84,19 +86,19 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
         };
       });
 
-    try {
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from('training_logs').insert(toInsert);
-        if (error) throw error;
+    if (toInsert.length > 0) {
+      const { error } = await saveTrainingLogs(toInsert);
+      if (error) {
+        setSaveError(
+          error.message ||
+            'Не удалось сохранить. В Supabase проверь: таблица training_logs, колонки (exercise_id, weight, reps, set_group_id, order_index), RLS — политика INSERT для anon.'
+        );
+        setSaving(false);
+        return;
       }
-      onComplete();
-    } catch (err) {
-      console.error('Save sets failed:', err);
-      // Сохраняем в localStorage как черновик и выходим
-      onComplete();
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
+    onComplete();
   };
 
   return (
@@ -104,6 +106,11 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
       <ScreenHeader title="" onBack={onBack} />
 
       <div className="p-4 max-w-lg mx-auto w-full space-y-4">
+        {saveError && (
+          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300 text-sm">
+            {saveError}
+          </div>
+        )}
         {/* Блок упражнения */}
         <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-2xl p-4">
           <div className="flex items-start gap-2">
