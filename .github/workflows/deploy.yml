@@ -25,7 +25,8 @@ jobs:
         run: npm install
 
       - name: Build
-        run: npx vite build
+        # Запускаем скрипт напрямую через node, игнорируя права доступа к файлу
+        run: node node_modules/vite/bin/vite.js build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
