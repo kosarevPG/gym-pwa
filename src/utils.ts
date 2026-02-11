@@ -35,3 +35,10 @@ export function createSetFromHistory(s: { weight: number; inputWeight?: number; 
     prevWeight: prevWeight ?? s.weight
   });
 }
+
+/** Оценка 1ПМ по формуле Эпли */
+export function calc1RM(weightKg: number, reps: number): number {
+  if (reps <= 0 || weightKg <= 0) return 0;
+  if (reps === 1) return weightKg;
+  return Math.round(weightKg * (1 + reps / 30));
+}
