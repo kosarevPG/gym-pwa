@@ -1,12 +1,16 @@
 name: Deploy Frontend
+
 on:
   push:
     branches: [ main ]
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 jobs:
+  # Первая работа: Сборка
   build:
     runs-on: ubuntu-latest
     steps:
@@ -17,16 +21,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # Мы убираем настройку 'cache', так как она требует наличия lock-файла
-          # Это позволит собрать проект, даже если package-lock.json отсутствует
 
       - name: Install dependencies
-        # Используем обычный install вместо ci
         run: npm install
 
       - name: Build
-        # Запускаем скрипт напрямую через node, игнорируя права доступа к файлу
-        run: node node_modules/vite/bin/vite.js build
+        # Если снова будет "Permission denied", замените эту строку на:
+        # run: node node_modules/vite/bin/vite.js build
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -36,6 +38,14 @@ jobs:
         with:
           path: './dist'
 
+  # Вторая работа: Деплой (запускается только после успешной сборки)
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
