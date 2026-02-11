@@ -1,82 +1,16 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="manifest.json">
-    <title>Sasha Gym Log</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        :root { --ios-blue: #007AFF; --ios-bg: #F2F2F7; }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--ios-bg); margin: 0; padding: env(safe-area-inset-top) 20px 20px; }
-        .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        h2 { font-weight: 700; font-size: 24px; margin: 20px 0 10px; }
-        input { width: 100%; border: 1px solid #E5E5EA; padding: 12px; border-radius: 10px; margin: 8px 0; font-size: 16px; box-sizing: border-box; -webkit-appearance: none; }
-        button { width: 100%; background: var(--ios-blue); color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 600; font-size: 17px; active { opacity: 0.8; } }
-        .log-entry { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 0.5px solid #C6C6C8; }
-        .log-entry:last-child { border-bottom: none; }
-    </style>
-</head>
-<body>
-    <h2>Тренировка</h2>
-    <div class="card">
-        <input type="text" id="ex" placeholder="Упражнение" list="ex-list">
-        <datalist id="ex-list">
-            <option value="Жим лежа">
-            <option value="Приседания">
-            <option value="Тяга штанги">
-        </datalist>
-        <div style="display: flex; gap: 12px;">
-            <input type="number" id="weight" placeholder="кг" inputmode="decimal">
-            <input type="number" id="reps" placeholder="повт" inputmode="numeric">
-        </div>
-        <button onclick="saveSet()">Записать подход</button>
-    </div>
-
-    <h3>Сегодня</h3>
-    <div id="logs" class="card"></div>
-
-    <script>
-        const supabaseUrl = 'https://iabklvkzdffwwrlugiwr.supabase.co';
-        const supabaseKey = 'sb_publishable_49iEmfAfFsckdE00zqsXJw_dKr-AuGD';
-        const client = supabase.createClient(supabaseUrl, supabaseKey);
-
-        async function saveSet() {
-            const ex = document.getElementById('ex').value;
-            const w = document.getElementById('weight').value;
-            const r = document.getElementById('reps').value;
-            
-            if(!ex || !w || !r) return alert('Заполни все поля');
-
-            const { error } = await client.from('training_logs').insert([
-                { exercise_name: ex, weight: parseFloat(w), reps: parseInt(r) }
-            ]);
-
-            if (error) alert('Ошибка: ' + error.message);
-            else {
-                document.getElementById('weight').value = '';
-                document.getElementById('reps').value = '';
-                render();
-            }
-        }
-
-        async function render() {
-            const { data } = await client.from('training_logs')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20);
-            
-            const container = document.getElementById('logs');
-            container.innerHTML = data.length ? data.map(d => `
-                <div class="log-entry">
-                    <span style="font-weight:500">${d.exercise_name}</span>
-                    <span style="color: #8E8E93">${d.weight} кг × ${d.reps}</span>
-                </div>
-            `).join('') : 'Пока записей нет';
-        }
-        render();
-    </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>GymApp</title>
+    <!-- Скрипт Телеграма обязателен -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script type="module" crossorigin src="/GymApp/assets/index-DX2-r2wt.js"></script>
+    <link rel="stylesheet" crossorigin href="/GymApp/assets/index-DAPWbS7y.css">
+  </head>
+  <body class="bg-zinc-950">
+    <div id="root"></div>
+  </body>
 </html>
