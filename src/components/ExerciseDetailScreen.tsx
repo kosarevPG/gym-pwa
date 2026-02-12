@@ -38,7 +38,6 @@ function calcTotalKg(inputStr: string, weightType: WeightInputType, baseWeight?:
 }
 
 export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }: ExerciseDetailScreenProps) {
-  const [targetRestSeconds, setTargetRestSeconds] = useState<number>(exercise.defaultRestSeconds ?? 120);
   const createSet = useCallback((order: number): WorkoutSet => ({
     id: crypto.randomUUID(),
     exerciseId: exercise.id,
@@ -142,6 +141,8 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
   }, []);
 
   const markSetDone = useCallback((setId: string) => {
+    const set = sets.find((s) => s.id === setId);
+    const restMin = set ? Math.max(0, parseInt(set.restMin, 10) || 0) : 0;
     setSets((prev) => prev.map((s) => {
       if (s.id !== setId) return s;
       const done = !s.completed;
@@ -149,13 +150,12 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
         ...s,
         completed: done,
         doneAt: done ? new Date().toISOString() : undefined,
-        restAfterSeconds: done ? targetRestSeconds : undefined,
-        restMin: done ? String(Math.round(targetRestSeconds / 60)) : s.restMin,
+        restAfterSeconds: done ? restMin * 60 : undefined,
         supersetExerciseId: done ? (supersetExercise?.id ?? null) : s.supersetExerciseId,
       };
     }));
-    setRestCountdownSec(targetRestSeconds);
-  }, [targetRestSeconds, supersetExercise?.id]);
+    if (set && !set.completed) setRestCountdownSec(restMin * 60);
+  }, [sets, supersetExercise?.id]);
 
   const calcSetAnalytics = useCallback((set: WorkoutSet) => {
     const repsNum = parseInt(set.reps, 10) || 0;
@@ -237,7 +237,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
           side_mult: analytics.sideMult,
           set_volume: analytics.volume,
           rpe: analytics.rpeNum || undefined,
-          rest_seconds: s.restAfterSeconds ?? targetRestSeconds,
+          rest_seconds: s.restAfterSeconds ?? (Math.max(0, parseInt(s.restMin, 10) || 0) * 60),
           superset_exercise_id: s.supersetExerciseId ?? supersetExercise?.id ?? null,
           one_rm: analytics.oneRm > 0 ? analytics.oneRm : undefined,
           volume: analytics.volume,
@@ -342,41 +342,14 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
           </div>
         </div>
 
-        {/* Таймер отдыха */}
-        <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-2xl p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-zinc-400">Target Rest</p>
-              <div className="flex items-center gap-2 mt-1">
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded bg-zinc-700 text-zinc-200 text-sm"
-                  onClick={() => setTargetRestSeconds((s) => Math.max(0, s - 15))}
-                >
-                  -15s
-                </button>
-                <input
-                  type="number"
-                  min="0"
-                  value={targetRestSeconds}
-                  onChange={(e) => setTargetRestSeconds(Math.max(0, parseInt(e.target.value || '0', 10)))}
-                  className="w-24 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-center"
-                />
-                <button
-                  type="button"
-                  className="px-2 py-1 rounded bg-zinc-700 text-zinc-200 text-sm"
-                  onClick={() => setTargetRestSeconds((s) => s + 15)}
-                >
-                  +15s
-                </button>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-zinc-400 flex items-center gap-1 justify-end"><TimerReset className="w-4 h-4" /> Таймер</p>
-              <p className={`font-mono text-3xl ${restCountdownSec > 0 ? 'text-emerald-400' : 'text-zinc-300'}`}>
-                {String(Math.floor(restCountdownSec / 60)).padStart(2, '0')}:{String(restCountdownSec % 60).padStart(2, '0')}
-              </p>
-            </div>
+        {/* Таймер отдыха: обратный отсчёт с момента отметки подхода */}
+        <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-2xl p-4 flex items-center justify-center gap-4">
+          <TimerReset className="w-6 h-6 text-zinc-500 shrink-0" />
+          <div className="text-center">
+            <p className="text-sm text-zinc-400">Отдых до следующего подхода</p>
+            <p className={`font-mono text-4xl tabular-nums ${restCountdownSec > 0 ? 'text-emerald-400' : 'text-zinc-400'}`}>
+              {String(Math.floor(restCountdownSec / 60)).padStart(2, '0')}:{String(restCountdownSec % 60).padStart(2, '0')}
+            </p>
           </div>
         </div>
 
@@ -396,109 +369,89 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
           )}
         </div>
 
-        {/* Таблица подходов */}
+        {/* Подходы: вес, повторения, отдых (мин); отметка «выполнено» запускает таймер */}
         <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto_auto] gap-2 px-4 py-2 border-b border-zinc-700 text-zinc-500 text-xs uppercase tracking-wide">
-            <span>{weightLabel}</span>
+          <div className="grid grid-cols-[1fr_1fr_1fr_auto_auto_auto] gap-2 px-4 py-2 border-b border-zinc-700 text-zinc-500 text-xs uppercase tracking-wide">
+            <span>Вес</span>
             <span>ПОВТ</span>
+            <span>Отдых (мин)</span>
             <span>RPE</span>
-            <span>Отдых</span>
-            <span className="w-8" />
-            <span className="w-8" />
+            <span className="w-12" />
+            <span className="w-10" />
           </div>
           <ul className="divide-y divide-zinc-700/50">
             {sets.map((set) => {
               const analytics = calcSetAnalytics(set);
               return (
-                <li key={set.id} className="px-4 py-3 flex items-center gap-2">
-                  <div className="grid grid-cols-4 gap-2 flex-1 min-w-0">
-                    <div>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        placeholder="0"
-                        value={set.inputWeight}
-                        onChange={(e) => updateSet(set.id, { inputWeight: e.target.value })}
-                        className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                      <div className="text-[10px] text-zinc-500 mt-0.5">
-                        {analytics.totalKg != null && `Итого: ${analytics.totalKg} кг`}
-                        {show1rm && analytics.oneRm > 0 && (
-                          <span className="block">1RM: {analytics.oneRm}</span>
-                        )}
-                        <span className="block">Vol: {Math.round(analytics.volume)}</span>
-                        <span className="block">Eff: {Math.round(analytics.effectiveLoad)}</span>
-                      </div>
-                    </div>
+                <li key={set.id} className="px-4 py-3 grid grid-cols-[1fr_1fr_1fr_auto_auto_auto] gap-2 items-center">
+                  <div className="min-w-0">
                     <input
                       type="text"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       placeholder="0"
-                      value={set.reps}
-                      onChange={(e) => updateSet(set.id, { reps: e.target.value })}
+                      value={set.inputWeight}
+                      onChange={(e) => updateSet(set.id, { inputWeight: e.target.value })}
                       className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                    <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      step="0.5"
-                      placeholder="8"
-                      value={set.rpe}
-                      onChange={(e) => updateSet(set.id, { rpe: e.target.value })}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="0"
-                      value={set.restAfterSeconds ?? ''}
-                      onChange={(e) => updateSet(set.id, { restAfterSeconds: parseInt(e.target.value || '0', 10) })}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                    {analytics.totalKg != null && (
+                      <p className="text-[10px] text-zinc-500 mt-0.5">Итого: {analytics.totalKg} кг</p>
+                    )}
                   </div>
-                  <div className="ml-2 flex items-center gap-1">
-                    {[7, 8, 9, 10].map((rpePreset) => (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={set.reps}
+                    onChange={(e) => updateSet(set.id, { reps: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={set.restMin}
+                    onChange={(e) => updateSet(set.id, { restMin: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    {[7, 8, 9, 10].map((r) => (
                       <button
-                        key={`${set.id}-rpe-${rpePreset}`}
+                        key={`${set.id}-rpe-${r}`}
                         type="button"
-                        onClick={() => updateSet(set.id, { rpe: String(rpePreset) })}
-                        className={`px-1.5 py-1 text-[10px] rounded ${
-                          String(rpePreset) === String(set.rpe)
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-zinc-800 text-zinc-300'
-                        }`}
-                        title={`RPE ${rpePreset}`}
+                        onClick={() => updateSet(set.id, { rpe: String(r) })}
+                        className={`px-1.5 py-0.5 text-[10px] rounded ${String(set.rpe) === String(r) ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}
+                        title={`RPE ${r}`}
                       >
-                        {rpePreset}
+                        {r}
                       </button>
                     ))}
                     {showSideControl && (
                       <select
                         value={set.side ?? 'both'}
                         onChange={(e) => updateSet(set.id, { side: e.target.value as WorkoutSet['side'] })}
-                        className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[10px]"
+                        className="bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-zinc-300"
                         title="Сторона"
                       >
-                        <option value="both">both</option>
-                        <option value="left">left</option>
-                        <option value="right">right</option>
+                        <option value="both">оба</option>
+                        <option value="left">L</option>
+                        <option value="right">R</option>
                       </select>
                     )}
                   </div>
                   <button
                     type="button"
                     onClick={() => markSetDone(set.id)}
-                    className={`p-2 rounded-lg ${set.completed ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 hover:text-emerald-300'}`}
-                    aria-label="Завершить сет"
-                    title="Done"
+                    className={`shrink-0 p-2.5 rounded-xl transition-colors ${set.completed ? 'text-emerald-400 bg-emerald-500/20' : 'text-zinc-500 hover:text-emerald-300 hover:bg-zinc-700/50'}`}
+                    aria-label="Подход выполнен"
+                    title="Отметить подход — запустит таймер отдыха"
                   >
-                    <Check className="w-4 h-4" />
+                    <Check className="w-5 h-5" />
                   </button>
                   <button
                     type="button"
                     onClick={() => removeSet(set.id)}
-                    className="p-2 text-zinc-500 hover:text-red-400 rounded-lg"
+                    className="shrink-0 p-2 text-zinc-500 hover:text-red-400 rounded-lg"
                     aria-label="Удалить подход"
                   >
                     <Trash2 className="w-4 h-4" />
