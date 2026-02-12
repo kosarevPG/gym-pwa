@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
 import { CATEGORIES } from '../data/categories';
 import type { Category } from '../types';
@@ -7,6 +7,9 @@ import type { Category } from '../types';
 interface CategoriesScreenProps {
   onBack: () => void;
   onSelectCategory: (category: Category) => void;
+  onAddExercise?: () => void;
+  /** Режим «выберите категорию для нового упражнения» после нажатия + */
+  addMode?: boolean;
 }
 
 /** Слоги категорий, для которых есть SVG в public/icons/categories/ */
@@ -29,33 +32,52 @@ function CategoryIcon({ slug }: { slug: string }) {
   );
 }
 
-export function CategoriesScreen({ onBack, onSelectCategory }: CategoriesScreenProps) {
+export function CategoriesScreen({ onBack, onSelectCategory, onAddExercise, addMode }: CategoriesScreenProps) {
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase().replace(/\s+/g, ' ');
     if (!q) return CATEGORIES;
-    return CATEGORIES.filter((c) => c.name.toLowerCase().includes(q));
+    return CATEGORIES.filter((c) => (c.name ?? '').toLowerCase().includes(q));
   }, [search]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <ScreenHeader title="Упражнения" onBack={onBack} />
+      <ScreenHeader
+        title="Упражнения"
+        onBack={onBack}
+        rightAction={
+          onAddExercise ? (
+            <button
+              type="button"
+              onClick={onAddExercise}
+              className="p-2 text-zinc-300 hover:text-white rounded-lg"
+              aria-label="Добавить упражнение"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          ) : undefined
+        }
+      />
       <div className="px-4 pb-3 pt-1 border-b border-zinc-800">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-          <input
-            type="text"
-            placeholder="Найти..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-          />
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Поиск по категориям..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
+          </div>
         </div>
       </div>
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
-        {/* Крупная сетка категорий 3 колонки, как в примере */}
+        {addMode && (
+          <p className="text-center text-sm text-blue-400 mb-3">Выберите категорию для нового упражнения</p>
+        )}
         <div className="grid grid-cols-3 gap-4 sm:gap-5">
           {filtered.map((cat) => (
             <button

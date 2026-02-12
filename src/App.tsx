@@ -14,6 +14,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
+  const [addFromCategoriesMode, setAddFromCategoriesMode] = useState(false);
 
   const sessionId = useMemo(() => `session_${Date.now()}`, []);
 
@@ -89,10 +90,28 @@ export default function App() {
     );
   }
 
+  const handleCategorySelect = useCallback(
+    (category: Category) => {
+      if (addFromCategoriesMode) {
+        setSelectedCategory(category);
+        setScreen('add-exercise');
+        setAddFromCategoriesMode(false);
+      } else {
+        openExercises(category);
+      }
+    },
+    [addFromCategoriesMode, openExercises]
+  );
+
   return (
     <CategoriesScreen
-      onBack={() => setScreen('home')}
-      onSelectCategory={openExercises}
+      addMode={addFromCategoriesMode}
+      onBack={() => {
+        setScreen('home');
+        setAddFromCategoriesMode(false);
+      }}
+      onSelectCategory={handleCategorySelect}
+      onAddExercise={() => setAddFromCategoriesMode(true)}
     />
   );
 }

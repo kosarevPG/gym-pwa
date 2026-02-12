@@ -76,13 +76,13 @@ export function ExerciseListScreen({
   }, [category.slug, refreshTrigger]);
 
   const filteredExercises = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim().toLowerCase().replace(/\s+/g, ' ');
     if (!q) return exercises;
-    return exercises.filter(
-      (ex) =>
-        (ex.nameRu && ex.nameRu.toLowerCase().includes(q)) ||
-        (ex.nameEn && ex.nameEn.toLowerCase().includes(q))
-    );
+    return exercises.filter((ex) => {
+      const ru = (ex.nameRu ?? '').toLowerCase();
+      const en = (ex.nameEn ?? '').toLowerCase();
+      return ru.includes(q) || en.includes(q);
+    });
   }, [exercises, search]);
 
   const categoryName = getCategoryBySlug(category.slug)?.name ?? category.name;
