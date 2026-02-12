@@ -377,13 +377,27 @@ export async function fetchExerciseHistory(exerciseId: string, limit = 30): Prom
   }));
 }
 
+/** «Last» — последний подход последней по дате сессии (по completed_at и order_index). */
 export async function fetchLastExerciseSnapshot(exerciseId: string): Promise<LastExerciseSnapshot | null> {
-  const history = await fetchExerciseHistory(exerciseId, 1);
-  if (history.length === 0) return null;
+  const select = 'set_group_id, order_index, completed_at, created_at, weight, reps';
+  const { data, error } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(select)
+    .eq('exercise_id', exerciseId)
+    .order('completed_at', { ascending: false })
+    .limit(100);
+
+  if (error || !data?.length) return null;
+
+  const rows = data as Array<{ set_group_id: string; order_index: number; completed_at: string | null; created_at: string; weight: number; reps: number }>;
+  const lastGroupId = rows[0].set_group_id;
+  const sessionRows = rows.filter((r) => r.set_group_id === lastGroupId);
+  const lastSet = sessionRows.reduce((best, r) => ((r.order_index ?? 0) > (best.order_index ?? 0) ? r : best), sessionRows[0]);
+  const ts = lastSet.completed_at || lastSet.created_at;
   return {
-    createdAt: history[0].createdAt,
-    weight: history[0].weight,
-    reps: history[0].reps,
+    createdAt: String(ts),
+    weight: Number(lastSet.weight ?? 0),
+    reps: Number(lastSet.reps ?? 0),
   };
 }
 
@@ -395,16 +409,16 @@ export interface LastSessionSetRow {
 }
 
 /**
- * Подтягивает последнюю завершённую серию подходов по упражнению.
- * Вес — то, что вводил пользователь (input_wt), иначе эффективный weight в кг.
+ * Подтягивает последнюю по дате сессию подходов по упражнению.
+ * Вес для подстановки — эффективный (weight в кг), чтобы в интерфейсе не показывать 0.1 вместо 40.
  */
 export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<LastSessionSetRow[]> {
-  const select = 'set_group_id, order_index, weight, reps, rest_seconds, input_wt, created_at';
+  const select = 'set_group_id, order_index, weight, reps, rest_seconds, completed_at';
   const { data, error } = await supabase
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
-    .order('created_at', { ascending: false })
+    .order('completed_at', { ascending: false })
     .limit(50);
 
   if (error || !data?.length) return [];
@@ -415,8 +429,7 @@ export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<
     weight: number;
     reps: number;
     rest_seconds?: number | null;
-    input_wt?: number | null;
-    created_at: string;
+    completed_at: string | null;
   }>;
 
   const lastGroupId = rows[0].set_group_id;
@@ -424,7 +437,7 @@ export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<
   sessionRows.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 
   return sessionRows.map((r) => ({
-    inputWeight: r.input_wt != null && !Number.isNaN(r.input_wt) ? String(r.input_wt) : String(r.weight ?? 0),
+    inputWeight: String(r.weight != null && r.weight > 0 ? r.weight : 0),
     reps: String(r.reps ?? 0),
     restMin: r.rest_seconds != null ? String(Math.round(r.rest_seconds / 60)) : '2',
   }));
