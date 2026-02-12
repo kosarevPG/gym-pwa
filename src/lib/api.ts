@@ -3,6 +3,7 @@ import type { BodyPart, BodyweightType, Equipment, Exercise, ExerciseWeightType,
 
 const EXERCISES_TABLE = 'exercises';
 const EQUIPMENT_TABLE = 'equipment';
+const BIOMETRICS_TABLE = 'biometrics';
 const TRAINING_LOGS_TABLE = import.meta.env.VITE_TRAINING_LOGS_TABLE || 'training_logs';
 
 const LEGACY_EXERCISE_SELECT = 'id, category, name_ru, name_en, weight_type, base_weight, target_weight_kg';
@@ -71,6 +72,39 @@ function mapExerciseRow(row: any): Exercise {
   };
 }
 
+export interface ExerciseHistoryRow {
+  id: string;
+  createdAt: string;
+  weight: number;
+  reps: number;
+  rpe?: number;
+  restSeconds?: number;
+  oneRm?: number;
+  volume?: number;
+  effectiveLoad?: number;
+}
+
+export interface LastExerciseSnapshot {
+  createdAt: string;
+  weight: number;
+  reps: number;
+}
+
+export interface SaveTrainingLogRow {
+  exercise_id: string;
+  weight: number;
+  reps: number;
+  set_group_id: string;
+  order_index: number;
+  rpe?: number;
+  rest_seconds?: number;
+  superset_exercise_id?: string | null;
+  one_rm?: number;
+  volume?: number;
+  effective_load?: number;
+  completed_at?: string;
+}
+
 /** Загрузить упражнения по категории из Supabase (старые строковые id игнорируются). */
 export async function fetchExercises(categorySlug: string): Promise<Exercise[]> {
   const v2 = await supabase
@@ -88,6 +122,40 @@ export async function fetchExercises(categorySlug: string): Promise<Exercise[]> 
       .order('name_ru');
     if (legacy.error) {
       console.error('fetchExercises legacy error:', legacy.error);
+      return [];
+    }
+    return (legacy.data ?? [])
+      .filter((row) => isUuid(String(row.id)))
+      .map(mapExerciseRow);
+  }
+
+  return (v2.data ?? [])
+    .filter((row) => isUuid(String(row.id)))
+    .map(mapExerciseRow);
+}
+
+/** Быстрый поиск упражнений по названию (для суперсета). */
+export async function searchExercises(query: string, limit = 20): Promise<Exercise[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  const escaped = q.replace(/[%_]/g, '\\$&');
+  const v2 = await supabase
+    .from(EXERCISES_TABLE)
+    .select(V2_EXERCISE_SELECT)
+    .or(`name_ru.ilike.%${escaped}%,name_en.ilike.%${escaped}%`)
+    .order('name_ru')
+    .limit(limit);
+
+  if (v2.error) {
+    const legacy = await supabase
+      .from(EXERCISES_TABLE)
+      .select(LEGACY_EXERCISE_SELECT)
+      .or(`name_ru.ilike.%${escaped}%,name_en.ilike.%${escaped}%`)
+      .order('name_ru')
+      .limit(limit);
+    if (legacy.error) {
+      console.error('searchExercises error:', legacy.error);
       return [];
     }
     return (legacy.data ?? [])
@@ -119,6 +187,87 @@ export async function fetchEquipmentOptions(): Promise<Equipment[]> {
     nameEn: String(row.name_en ?? ''),
     defaultWeightStep: row.default_weight_step != null ? Number(row.default_weight_step) : undefined,
   }));
+}
+
+/** Последний вес из биометрии, если таблица есть. */
+export async function fetchLatestBodyWeight(): Promise<number | null> {
+  const { data, error } = await supabase
+    .from(BIOMETRICS_TABLE)
+    .select('weight_kg, created_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+  return data.weight_kg != null ? Number(data.weight_kg) : null;
+}
+
+export async function fetchExerciseHistory(exerciseId: string, limit = 30): Promise<ExerciseHistoryRow[]> {
+  const v2Select = 'id, created_at, weight, reps, rpe, rest_seconds, one_rm, volume, effective_load';
+  const legacySelect = 'id, created_at, weight, reps';
+
+  const v2 = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(v2Select)
+    .eq('exercise_id', exerciseId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (v2.error) {
+    const legacy = await supabase
+      .from(TRAINING_LOGS_TABLE)
+      .select(legacySelect)
+      .eq('exercise_id', exerciseId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (legacy.error) {
+      console.error('fetchExerciseHistory error:', legacy.error);
+      return [];
+    }
+    return (legacy.data ?? []).map((row) => ({
+      id: String(row.id),
+      createdAt: String(row.created_at),
+      weight: Number(row.weight ?? 0),
+      reps: Number(row.reps ?? 0),
+    }));
+  }
+
+  return (v2.data ?? []).map((row) => ({
+    id: String(row.id),
+    createdAt: String(row.created_at),
+    weight: Number(row.weight ?? 0),
+    reps: Number(row.reps ?? 0),
+    rpe: row.rpe != null ? Number(row.rpe) : undefined,
+    restSeconds: row.rest_seconds != null ? Number(row.rest_seconds) : undefined,
+    oneRm: row.one_rm != null ? Number(row.one_rm) : undefined,
+    volume: row.volume != null ? Number(row.volume) : undefined,
+    effectiveLoad: row.effective_load != null ? Number(row.effective_load) : undefined,
+  }));
+}
+
+export async function fetchLastExerciseSnapshot(exerciseId: string): Promise<LastExerciseSnapshot | null> {
+  const history = await fetchExerciseHistory(exerciseId, 1);
+  if (history.length === 0) return null;
+  return {
+    createdAt: history[0].createdAt,
+    weight: history[0].weight,
+    reps: history[0].reps,
+  };
+}
+
+export async function fetchPersonalBestWeight(exerciseId: string): Promise<number | null> {
+  const { data, error } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select('weight')
+    .eq('exercise_id', exerciseId)
+    .order('weight', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.weight != null ? Number(data.weight) : null;
 }
 
 export interface AddExerciseInput {
@@ -194,9 +343,9 @@ export async function addExercise(exercise: AddExerciseInput): Promise<{ data: E
   return { data: mapExerciseRow(legacy.data), error: null };
 }
 
-/** Сохранить подходы в Supabase. exercise_id должен быть UUID из таблицы exercises. */
+/** Сохранить подходы в Supabase. Сначала пробуем расширенную v2-схему, затем legacy fallback. */
 export async function saveTrainingLogs(
-  rows: { exercise_id: string; weight: number; reps: number; set_group_id: string; order_index: number }[]
+  rows: SaveTrainingLogRow[]
 ): Promise<{ error: { message: string; code?: string; details?: string } | null }> {
   if (rows.length === 0) {
     return { error: null };
@@ -211,35 +360,52 @@ export async function saveTrainingLogs(
     };
   }
 
-  // Приводим типы под схему: exercise_id — строка UUID, reps и order_index — целые
-  const payload = rows.map((r) => ({
+  const v2Payload = rows.map((r) => ({
+    exercise_id: String(r.exercise_id).trim(),
+    weight: Number(r.weight),
+    reps: Math.floor(Number(r.reps)) || 0,
+    set_group_id: String(r.set_group_id),
+    order_index: Math.floor(Number(r.order_index)) || 0,
+    rpe: r.rpe != null ? Number(r.rpe) : null,
+    rest_seconds: r.rest_seconds != null ? Math.floor(Number(r.rest_seconds)) : null,
+    superset_exercise_id: r.superset_exercise_id && isUuid(r.superset_exercise_id) ? r.superset_exercise_id : null,
+    one_rm: r.one_rm != null ? Number(r.one_rm) : null,
+    volume: r.volume != null ? Number(r.volume) : null,
+    effective_load: r.effective_load != null ? Number(r.effective_load) : null,
+    completed_at: r.completed_at ?? new Date().toISOString(),
+  }));
+
+  const v2 = await supabase.from(TRAINING_LOGS_TABLE).insert(v2Payload);
+  if (!v2.error) {
+    return { error: null };
+  }
+
+  console.warn('saveTrainingLogs v2 failed, fallback to legacy schema:', v2.error.message);
+  const legacyPayload = rows.map((r) => ({
     exercise_id: String(r.exercise_id).trim(),
     weight: Number(r.weight),
     reps: Math.floor(Number(r.reps)) || 0,
     set_group_id: String(r.set_group_id),
     order_index: Math.floor(Number(r.order_index)) || 0,
   }));
-
-  console.log('saveTrainingLogs payload:', payload);
-
-  const { error } = await supabase.from(TRAINING_LOGS_TABLE).insert(payload);
-
-  if (error) {
-    const errMsg = [
-      error.message,
-      error.code && `[${error.code}]`,
-      error.details && String(error.details),
-    ]
-      .filter(Boolean)
-      .join(' ');
-    console.error('saveTrainingLogs error:', error);
-    return {
-      error: {
-        message: errMsg || 'Ошибка сохранения',
-        code: error.code,
-        details: error.details != null ? String(error.details) : undefined,
-      },
-    };
+  const legacy = await supabase.from(TRAINING_LOGS_TABLE).insert(legacyPayload);
+  if (!legacy.error) {
+    return { error: null };
   }
-  return { error: null };
+
+  const errMsg = [
+    legacy.error.message || v2.error.message,
+    legacy.error.code && `[${legacy.error.code}]`,
+    legacy.error.details && String(legacy.error.details),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return {
+    error: {
+      message: errMsg || 'Ошибка сохранения',
+      code: legacy.error.code || v2.error.code,
+      details: legacy.error.details != null ? String(legacy.error.details) : undefined,
+    },
+  };
 }

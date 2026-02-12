@@ -46,12 +46,18 @@ export interface WorkoutSet {
   inputWeight: string;
   reps: string;
   restMin: string;
+  rpe: string;
+  restAfterSeconds?: number;
+  doneAt?: string;
+  supersetExerciseId?: string | null;
   completed: boolean;
   order: number;
   /** рассчитанный итого кг */
   totalWeightKg?: number;
   /** рассчитанный 1PM */
   estimated1Rm?: number;
+  volume?: number;
+  effectiveLoad?: number;
 }
 
 export interface WorkoutSession {
