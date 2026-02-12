@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Trophy, Calendar, FolderDown, Trash2, Plus, Check, Search, TimerReset, MoreVertical } from 'lucide-react';
+import { ChevronLeft, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X } from 'lucide-react';
 import {
   saveTrainingLogs,
   fetchExerciseHistory,
@@ -22,6 +22,7 @@ interface ExerciseDetailScreenProps {
   onComplete: () => void;
 }
 
+// Утилиты для расчетов (без изменений)
 function getWeightType(ex: ExerciseType): WeightInputType {
   const t = ex.weightType ?? 'barbell';
   return getWeightInputType(undefined, t);
@@ -37,46 +38,38 @@ function calcTotalKg(inputStr: string, weightType: WeightInputType, baseWeight?:
 }
 
 export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }: ExerciseDetailScreenProps) {
+  // --- STATE ---
   const createSet = useCallback((order: number): WorkoutSet => ({
     id: crypto.randomUUID(),
     exerciseId: exercise.id,
     inputWeight: '',
     reps: '',
     restMin: String(Math.round((exercise.defaultRestSeconds ?? 120) / 60)),
-    rpe: '8',
-    restAfterSeconds: undefined,
-    doneAt: undefined,
-    supersetExerciseId: null,
-    side: 'both',
+    rpe: '', // Пустой по умолчанию, чтобы не засорять UI
     completed: false,
     order,
+    side: 'both',
+    supersetExerciseId: null,
   }), [exercise.id, exercise.defaultRestSeconds]);
 
   const [sets, setSets] = useState<WorkoutSet[]>(() => [createSet(1)]);
-  const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [restCountdownSec, setRestCountdownSec] = useState(0);
-  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Data State
   const [historyRows, setHistoryRows] = useState<ExerciseHistoryRow[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [lastSnapshot, setLastSnapshot] = useState<{ createdAt: string; weight: number; reps: number } | null>(null);
   const [personalBest, setPersonalBest] = useState<number | null>(null);
   const [bodyWeight, setBodyWeight] = useState<number | null>(null);
-  const [supersetSearchOpen, setSupersetSearchOpen] = useState(false);
-  const [supersetQuery, setSupersetQuery] = useState('');
-  const [supersetResults, setSupersetResults] = useState<ExerciseType[]>([]);
-  const [supersetLoading, setSupersetLoading] = useState(false);
-  const [supersetExercise, setSupersetExercise] = useState<ExerciseType | null>(null);
-  const [noteExpanded, setNoteExpanded] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+
+  // UI State
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const setInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const weightType = getWeightType(exercise);
-  const weightLabel = WEIGHT_FORMULAS[weightType]?.label ?? '×1 блин';
-  const show1rm = allows1rm(weightType);
-  const showSideControl = weightType === 'dumbbell' || !!exercise.isUnilateral;
 
+  // --- EFFECTS ---
   useEffect(() => {
     Promise.all([
       fetchLastExerciseSnapshot(exercise.id),
@@ -87,499 +80,316 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
       setPersonalBest(pb);
       setBodyWeight(bw);
     });
-    fetchExerciseHistory(exercise.id, 40).then(setHistoryRows);
+    fetchExerciseHistory(exercise.id, 10).then(setHistoryRows);
   }, [exercise.id]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 2000);
-    return () => window.clearTimeout(t);
-  }, [toast]);
-
+  // Таймер
   useEffect(() => {
     if (restCountdownSec <= 0) return;
-    const timer = window.setInterval(() => {
-      setRestCountdownSec((prev) => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
+    const interval = setInterval(() => setRestCountdownSec(prev => Math.max(0, prev - 1)), 1000);
+    return () => clearInterval(interval);
   }, [restCountdownSec]);
 
-  useEffect(() => {
-    if (!supersetSearchOpen) return;
-    const q = supersetQuery.trim();
-    if (q.length < 2) {
-      setSupersetResults([]);
+  // --- LOGIC ---
+  const updateSet = (id: string, patch: Partial<WorkoutSet>) => {
+    setSets(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  };
+
+  const addSet = () => {
+    const lastSet = sets[sets.length - 1];
+    const newSet = createSet(sets.length + 1);
+    // Копируем вес и репсы из предыдущего подхода для удобства
+    if (lastSet) {
+      newSet.inputWeight = lastSet.inputWeight;
+      newSet.reps = lastSet.reps;
+      newSet.restMin = lastSet.restMin;
+    }
+    setSets(prev => [...prev, newSet]);
+
+    // Автофокус на новый сет через тик
+    setTimeout(() => {
+      setInputRefs.current[`${newSet.id}-weight`]?.focus();
+      // Скролл к низу
+      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }, 100);
+  };
+
+  const toggleSetComplete = (setId: string) => {
+    const setIndex = sets.findIndex(s => s.id === setId);
+    const set = sets[setIndex];
+    if (!set) return;
+
+    const isCompleting = !set.completed;
+    const now = new Date().toISOString();
+
+    updateSet(setId, {
+      completed: isCompleting,
+      doneAt: isCompleting ? now : undefined
+    });
+
+    if (isCompleting) {
+      // Вибрация
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
+
+      // Запуск таймера
+      const restSec = (parseFloat(set.restMin) || 0) * 60;
+      if (restSec > 0) setRestCountdownSec(restSec);
+
+      // Фокус на следующий сет
+      const nextSet = sets[setIndex + 1];
+      if (nextSet) {
+        setInputRefs.current[`${nextSet.id}-weight`]?.focus();
+      }
+    } else {
+      setRestCountdownSec(0);
+    }
+  };
+
+  const handleFinish = async () => {
+    setSaving(true);
+    const validSets = sets.filter(s => s.completed || (s.inputWeight && s.reps));
+
+    if (validSets.length === 0) {
+      onComplete(); // Если ничего не делали, просто выходим
       return;
     }
-    setSupersetLoading(true);
-    const t = window.setTimeout(() => {
-      searchExercises(q, 15).then((items) => {
-        setSupersetResults(items.filter((e) => e.id !== exercise.id));
-        setSupersetLoading(false);
-      });
-    }, 250);
-    return () => window.clearTimeout(t);
-  }, [supersetQuery, supersetSearchOpen, exercise.id]);
 
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    const data = await fetchExerciseHistory(exercise.id, 50);
-    setHistoryRows(data);
-    setHistoryLoading(false);
-  }, [exercise.id]);
-
-  const updateSet = useCallback(
-    (id: string, patch: Partial<WorkoutSet>) => {
-      setSets((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...patch } : s))
-      );
-    },
-    []
-  );
-
-  const addSet = useCallback(() => {
-    setSets((prev) => [...prev, createSet(prev.length + 1)]);
-  }, [createSet]);
-
-  const removeSet = useCallback((id: string) => {
-    setSets((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      return next.map((s, i) => ({ ...s, order: i + 1 }));
-    });
-  }, []);
-
-  const markSetDone = useCallback((setId: string) => {
-    const set = sets.find((s) => s.id === setId);
-    const restMin = set ? Math.max(0, parseInt(set.restMin, 10) || 0) : 0;
-    const isMarkingDone = set && !set.completed;
-    setSets((prev) => prev.map((s) => {
-      if (s.id !== setId) return s;
-      const done = !s.completed;
+    const logs = validSets.map(s => {
+      const totalKg = calcTotalKg(s.inputWeight, weightType, exercise.baseWeight) ?? 0;
+      const rps = parseInt(s.reps) || 0;
+      const vol = totalKg * rps;
       return {
-        ...s,
-        completed: done,
-        doneAt: done ? new Date().toISOString() : undefined,
-        restAfterSeconds: done ? restMin * 60 : undefined,
-        supersetExerciseId: done ? (supersetExercise?.id ?? null) : s.supersetExerciseId,
+        exercise_id: exercise.id,
+        weight: totalKg,
+        reps: rps,
+        set_group_id: sessionId,
+        order_index: s.order,
+        input_wt: parseFloat(s.inputWeight) || 0,
+        side: s.side ?? 'both',
+        set_volume: vol,
+        rpe: s.rpe ? parseFloat(s.rpe) : undefined,
+        rest_seconds: (parseFloat(s.restMin) || 0) * 60,
+        completed_at: s.doneAt ?? new Date().toISOString(),
       };
-    }));
-    if (isMarkingDone) {
-      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
-      setRestCountdownSec(restMin * 60);
-      setToast(`Таймер отдыха: ${String(Math.floor(restMin)).padStart(2, '0')}:00`);
-      const idx = sets.findIndex((s) => s.id === setId);
-      const nextSet = sets[idx + 1];
-      if (nextSet) {
-        requestAnimationFrame(() => {
-          const el = setInputRefs.current[nextSet.id + '-weight'];
-          if (el) el.focus();
-        });
-      }
-    }
-  }, [sets, supersetExercise?.id]);
+    });
 
-  const calcSetAnalytics = useCallback((set: WorkoutSet) => {
-    const repsNum = parseInt(set.reps, 10) || 0;
-    const rpeNum = parseFloat(set.rpe) || 0;
-    const totalKg = calcTotalKg(set.inputWeight, weightType, exercise.baseWeight);
-    const weightFor1rm = (totalKg != null && totalKg > 0) ? totalKg : (bodyWeight ?? 0);
-    const oneRm = repsNum > 0 ? calc1RM(weightFor1rm, repsNum) : 0;
-    const sideMult = calcSideMult(exercise.weightType ?? 'standard', set.side ?? 'both');
-    const volume = ((totalKg ?? 0) * repsNum * sideMult);
-    const effectiveLoad = volume * (rpeNum > 0 ? (rpeNum / 10) : 0);
-    return {
-      repsNum,
-      rpeNum,
-      totalKg,
-      oneRm,
-      sideMult,
-      volume,
-      effectiveLoad,
-    };
-  }, [weightType, exercise.baseWeight, bodyWeight, exercise.weightType]);
-
-  const sessionTotals = useMemo(() => {
-    return sets.reduce((acc, s) => {
-      const a = calcSetAnalytics(s);
-      acc.volume += a.volume;
-      acc.effective += a.effectiveLoad;
-      return acc;
-    }, { volume: 0, effective: 0 });
-  }, [sets, calcSetAnalytics]);
-
-  const todayMedianSetVolume = useMemo(() => {
-    const vols = sets.map((s) => calcSetAnalytics(s).volume).filter((v) => v > 0);
-    return median(vols);
-  }, [sets, calcSetAnalytics]);
-
-  const baselineMedianSetVolume = useMemo(() => {
-    const vols = historyRows
-      .map((h) => (h.volume != null ? h.volume : h.weight * h.reps))
-      .filter((v) => v > 0);
-    return median(vols);
-  }, [historyRows]);
-
-  const baselineRatio = useMemo(() => {
-    if (!todayMedianSetVolume || !baselineMedianSetVolume) return null;
-    return todayMedianSetVolume / baselineMedianSetVolume;
-  }, [todayMedianSetVolume, baselineMedianSetVolume]);
-
-  const workingSetRpes = useMemo(() => {
-    return sets
-      .map((s) => parseFloat(s.rpe) || 0)
-      .filter((v) => v > 0);
-  }, [sets]);
-  const deltaRpe = useMemo(() => {
-    if (workingSetRpes.length < 2) return 0;
-    return workingSetRpes[workingSetRpes.length - 1] - workingSetRpes[0];
-  }, [workingSetRpes]);
-
-  const overloadDot = useMemo(() => {
-    if (baselineRatio == null) return false;
-    return deltaRpe >= 1 && baselineRatio < 0.95;
-  }, [deltaRpe, baselineRatio]);
-
-  const handleComplete = async () => {
-    setSaveError(null);
-    setSaving(true);
-    const toInsert = sets
-      .filter((s) => s.inputWeight.trim() !== '' || s.reps.trim() !== '')
-      .map((s) => {
-        const analytics = calcSetAnalytics(s);
-        return {
-          exercise_id: exercise.id,
-          weight: analytics.totalKg ?? 0,
-          reps: analytics.repsNum,
-          set_group_id: sessionId,
-          order_index: s.order,
-          input_wt: parseFloat(s.inputWeight) || 0,
-          side: s.side ?? 'both',
-          body_wt_snapshot: bodyWeight ?? null,
-          side_mult: analytics.sideMult,
-          set_volume: analytics.volume,
-          rpe: analytics.rpeNum || undefined,
-          rest_seconds: s.restAfterSeconds ?? (Math.max(0, parseInt(s.restMin, 10) || 0) * 60),
-          superset_exercise_id: s.supersetExerciseId ?? supersetExercise?.id ?? null,
-          one_rm: analytics.oneRm > 0 ? analytics.oneRm : undefined,
-          volume: analytics.volume,
-          effective_load: analytics.effectiveLoad,
-          completed_at: s.doneAt ?? new Date().toISOString(),
-        };
-      });
-
-    if (toInsert.length > 0) {
-      const { error } = await saveTrainingLogs(toInsert);
-      if (error) {
-        setSaveError(
-          error.message ||
-            'Не удалось сохранить. В Supabase проверь: таблица training_logs, колонки (exercise_id, weight, reps, set_group_id, order_index), RLS — политика INSERT для anon.'
-        );
-        setSaving(false);
-        return;
-      }
-    }
+    await saveTrainingLogs(logs as Parameters<typeof saveTrainingLogs>[0]);
     setSaving(false);
     onComplete();
   };
 
-  const formatDateShort = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+  // --- RENDER HELPERS ---
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Получаем "Пред. результат" для конкретного сета из истории (упрощенно: берем последний снапшот)
+  const prevData = lastSnapshot ? `${lastSnapshot.weight} × ${lastSnapshot.reps}` : '—';
+
   return (
-    <div className="min-h-screen bg-neutral-900 text-white flex flex-col">
-      {/* Compact header: back + exercise name + stats + history + menu */}
-      <header className="sticky top-0 z-30 bg-neutral-900/90 backdrop-blur-md border-b border-neutral-800 py-2.5 px-3 flex items-center justify-between gap-2">
-        <button type="button" onClick={onBack} className="p-2 -ml-1 text-neutral-400 hover:text-white" aria-label="Назад">
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-white text-sm truncate">{exercise.nameRu}</span>
-            {(personalBest ?? exercise.targetWeightKg) != null && (
-              <span className="flex items-center gap-0.5 text-amber-400/90 text-xs">
-                <Trophy className="w-3.5 h-3.5" />
-                {personalBest ?? exercise.targetWeightKg} кг
-              </span>
-            )}
-            {overloadDot && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="Fatigue overload" />}
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-neutral-400 mt-0.5">
-            <span>ΔRPE {deltaRpe >= 0 ? '+' : ''}{deltaRpe.toFixed(1)}</span>
-            {baselineRatio != null && (
-              <span className={baselineRatio >= 1.05 ? 'text-emerald-400/90' : baselineRatio >= 0.95 ? 'text-neutral-400' : 'text-amber-400/90'}>
-                {(baselineRatio * 100).toFixed(0)}% baseline
-              </span>
-            )}
-            {lastSnapshot && (
-              <span className="truncate">Пред: {lastSnapshot.weight}×{lastSnapshot.reps}</span>
-            )}
+    <div className="min-h-screen bg-black text-zinc-100 flex flex-col pb-safe">
+
+      {/* 1. Header: Minimal & Sticky */}
+      <header className="sticky top-0 z-20 bg-black/80 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800 transition-colors">
+            <ChevronLeft className="w-6 h-6 text-zinc-300" />
+          </button>
+          <div>
+            <h1 className="font-bold text-lg leading-tight truncate max-w-[200px]">{exercise.nameRu}</h1>
+            <div className="flex items-center gap-2 text-xs text-zinc-400">
+              {personalBest && <span className="flex items-center gap-1"><Trophy className="w-3 h-3 text-amber-500" /> PB: {personalBest} кг</span>}
+              <span>• Last: {prevData}</span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-0.5 shrink-0">
-          <button type="button" onClick={() => { setHistoryOpen(true); void loadHistory(); }} className="p-2 text-neutral-400 hover:text-white" aria-label="История">
-            <Calendar className="w-5 h-5" />
+
+        <div className="flex items-center gap-2">
+          {/* Таймер в хедере, если активен */}
+          {restCountdownSec > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-900/30 border border-emerald-500/30 rounded-full">
+              <Timer className="w-4 h-4 text-emerald-400 animate-pulse" />
+              <span className="font-mono font-medium text-emerald-400">{formatTime(restCountdownSec)}</span>
+            </div>
+          )}
+          <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 rounded-full hover:bg-zinc-800">
+            <MoreVertical className="w-5 h-5 text-zinc-400" />
           </button>
-          <div className="relative">
-            <button type="button" onClick={() => { setSupersetSearchOpen(true); setSupersetQuery(''); setSupersetResults([]); }} className="p-2 text-neutral-400 hover:text-white" aria-label="Связать упражнение">
-              <MoreVertical className="w-5 h-5" />
-            </button>
-            {supersetExercise && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-blue-500" title={supersetExercise.nameRu} />
-            )}
-          </div>
         </div>
       </header>
 
-      {/* Floating rest timer — only when resting */}
-      {restCountdownSec > 0 && (
-        <div className="fixed top-14 right-3 z-20 flex items-center gap-2 bg-neutral-800/95 backdrop-blur rounded-full px-3 py-2 shadow-lg border border-neutral-700/50">
-          <TimerReset className="w-4 h-4 text-emerald-400" />
-          <span className="font-mono text-lg tabular-nums text-emerald-400">
-            {String(Math.floor(restCountdownSec / 60)).padStart(2, '0')}:{String(restCountdownSec % 60).padStart(2, '0')}
-          </span>
-        </div>
-      )}
+      {/* 2. Main Content: List of Cards */}
+      <div className="flex-1 p-4 space-y-4">
+        {sets.map((set, idx) => {
+          const isActive = !set.completed;
+          const isDone = set.completed;
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-30 bg-neutral-800 text-white text-sm px-4 py-2 rounded-xl shadow-lg border border-neutral-700">
-          {toast}
-        </div>
-      )}
-
-      <div className="p-4 max-w-lg mx-auto w-full space-y-4 pb-2">
-        {saveError && (
-          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300 text-sm">
-            {saveError}
-          </div>
-        )}
-
-        {/* Note: collapsible / single-line */}
-        <div className="rounded-xl bg-neutral-800/60 overflow-hidden">
-          {noteExpanded ? (
-            <div className="p-2">
-              <input
-                type="text"
-                placeholder="Заметка..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onBlur={() => setNoteExpanded(false)}
-                autoFocus
-                className="w-full bg-neutral-800 border-0 rounded-lg px-3 py-2 text-white text-sm placeholder-neutral-500 focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-          ) : (
-            <button type="button" onClick={() => setNoteExpanded(true)} className="w-full flex items-center gap-2 px-3 py-2 text-left text-neutral-400 hover:text-neutral-300 text-sm">
-              <FolderDown className="w-4 h-4 shrink-0" />
-              {note.trim() ? <span className="truncate">{note}</span> : <span>Добавить заметку...</span>}
-            </button>
-          )}
-        </div>
-
-        {/* Set cards: zebra, large inputs, prev placeholder, RPE slider, full-row done */}
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-neutral-400 px-1">Подходы</p>
-          <ul className="space-y-2">
-            {sets.map((set, index) => {
-              const analytics = calcSetAnalytics(set);
-              const isEven = index % 2 === 0;
-              const prevHint = index === 0 && lastSnapshot ? { weight: lastSnapshot.weight, reps: lastSnapshot.reps } : null;
-              return (
-                <li
-                  key={set.id}
-                  className={`rounded-xl overflow-hidden transition-opacity ${set.completed ? 'opacity-70' : 'opacity-100'} ${isEven ? 'bg-neutral-800/70' : 'bg-neutral-800/40'}`}
+          return (
+            <div
+              key={set.id}
+              className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+                isDone
+                  ? 'bg-zinc-900 border-zinc-800 opacity-60'
+                  : 'bg-zinc-900 border-zinc-700 shadow-lg'
+              }`}
+            >
+              {/* Верхняя часть: Основной ввод */}
+              <div className="flex items-stretch">
+                {/* Номер сета / Чекбокс */}
+                <button
+                  onClick={() => toggleSetComplete(set.id)}
+                  className={`w-14 flex items-center justify-center border-r transition-colors ${
+                    isDone
+                      ? 'bg-emerald-500/20 border-emerald-500/20 text-emerald-500'
+                      : 'border-zinc-800 bg-zinc-800/50 text-zinc-500 hover:text-white'
+                  }`}
                 >
-                  <div className="p-4 grid grid-cols-[auto_1fr_1fr_1fr_1fr_auto] gap-3 items-center">
-                    {/* Set number + tap to mark done */}
-                    <button
-                      type="button"
-                      onClick={() => markSetDone(set.id)}
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 font-semibold text-lg transition-colors ${set.completed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-neutral-700/80 text-neutral-400 hover:bg-neutral-700 hover:text-white'}`}
-                      aria-label={set.completed ? 'Подход выполнен' : 'Отметить подход'}
-                    >
-                      {set.completed ? <Check className="w-6 h-6" /> : set.order}
-                    </button>
-                    <div className="min-w-0">
-                      <input
-                        ref={(el) => { setInputRefs.current[set.id + '-weight'] = el; }}
-                        type="text"
-                        inputMode="decimal"
-                        placeholder={prevHint ? String(prevHint.weight) : '0'}
-                        value={set.inputWeight}
-                        onChange={(e) => updateSet(set.id, { inputWeight: e.target.value })}
-                        className="w-full bg-neutral-800 rounded-lg px-3 py-3 text-white text-lg text-center placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      {analytics.totalKg != null && (
-                        <p className="text-[11px] text-neutral-400 mt-1">Итого: {analytics.totalKg} кг</p>
-                      )}
-                    </div>
+                  {isDone ? <Check className="w-6 h-6" /> : <span className="font-bold text-lg">{set.order}</span>}
+                </button>
+
+                {/* Поля ввода */}
+                <div className="flex-1 grid grid-cols-2 divide-x divide-zinc-800">
+                  {/* ВЕС */}
+                  <div className="relative p-3">
+                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1 text-center">
+                      Вес (кг)
+                    </label>
                     <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder={prevHint ? String(prevHint.reps) : '0'}
-                      value={set.reps}
-                      onChange={(e) => updateSet(set.id, { reps: e.target.value })}
-                      className="w-full bg-neutral-800 rounded-lg px-3 py-3 text-white text-lg text-center placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      ref={el => setInputRefs.current[`${set.id}-weight`] = el}
+                      type="number"
+                      inputMode="decimal"
+                      value={set.inputWeight}
+                      onChange={e => updateSet(set.id, { inputWeight: e.target.value })}
+                      placeholder={lastSnapshot ? String(lastSnapshot.weight) : "0"}
+                      className={`w-full bg-transparent text-center font-bold text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                     />
+                  </div>
+
+                  {/* ПОВТОРЫ */}
+                  <div className="relative p-3">
+                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1 text-center">
+                      Повторы
+                    </label>
                     <input
                       type="number"
-                      min="0"
                       inputMode="numeric"
-                      placeholder="0"
-                      value={set.restMin}
-                      onChange={(e) => updateSet(set.id, { restMin: e.target.value })}
-                      className="w-full bg-neutral-800 rounded-lg px-3 py-3 text-white text-lg text-center placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={set.reps}
+                      onChange={e => updateSet(set.id, { reps: e.target.value })}
+                      placeholder={lastSnapshot ? String(lastSnapshot.reps) : "0"}
+                      className={`w-full bg-transparent text-center font-bold text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                     />
-                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                      {[6, 7, 8, 9, 10].map((r) => (
-                        <button
-                          key={`${set.id}-rpe-${r}`}
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); updateSet(set.id, { rpe: String(r) }); }}
-                          className={`min-w-[2rem] py-1.5 px-2 text-sm font-medium rounded-lg transition-colors ${String(set.rpe) === String(r) ? 'bg-blue-600 text-white' : 'bg-neutral-700/80 text-neutral-400 hover:bg-neutral-700'}`}
-                          title={`RPE ${r}`}
-                        >
-                          {r}
-                        </button>
-                      ))}
-                      {showSideControl && (
-                        <select
-                          value={set.side ?? 'both'}
-                          onChange={(e) => updateSet(set.id, { side: e.target.value as WorkoutSet['side'] })}
-                          className="bg-neutral-700/80 border-0 rounded-lg px-2 py-1.5 text-xs text-neutral-300"
-                          title="Сторона"
-                        >
-                          <option value="both">оба</option>
-                          <option value="left">L</option>
-                          <option value="right">R</option>
-                        </select>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); removeSet(set.id); }}
-                      className="p-2 text-neutral-500 hover:text-red-400 rounded-lg shrink-0"
-                      aria-label="Удалить подход"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
-          <button
-            type="button"
-            onClick={addSet}
-            className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-neutral-600 rounded-xl text-neutral-400 hover:text-neutral-300 hover:border-neutral-500 text-sm font-medium"
-          >
-            <Plus className="w-4 h-4" /> Подход
-          </button>
-        </div>
+                </div>
+              </div>
 
-        <div className="rounded-xl bg-neutral-800/40 p-3 text-sm text-neutral-400">
-          <div className="flex justify-between"><span>Volume</span><span className="text-white">{Math.round(sessionTotals.volume)}</span></div>
-          <div className="flex justify-between"><span>Effective</span><span className="text-white">{Math.round(sessionTotals.effective)}</span></div>
-        </div>
+              {/* Нижняя часть: Доп настройки (RPE, Отдых) - видима только если сет не завершен или развернут */}
+              {!isDone && (
+                <div className="bg-zinc-950/50 px-3 py-2 flex items-center justify-between border-t border-zinc-800/50">
+                  {/* RPE Selector - Compact Scrollable */}
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar mask-gradient">
+                    <span className="text-[10px] text-zinc-600 font-bold uppercase mr-1">RPE</span>
+                    {[7, 8, 9, 10].map(val => (
+                      <button
+                        key={val}
+                        onClick={() => updateSet(set.id, { rpe: String(val) })}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                          set.rpe === String(val)
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                        }`}
+                      >
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Rest Input */}
+                  <div className="flex items-center gap-2 pl-4 border-l border-zinc-800">
+                    <Timer className="w-3.5 h-3.5 text-zinc-500" />
+                    <input
+                      type="number"
+                      value={set.restMin}
+                      onChange={e => updateSet(set.id, { restMin: e.target.value })}
+                      className="w-8 bg-transparent text-right text-sm text-zinc-300 focus:outline-none border-b border-transparent focus:border-blue-500"
+                    />
+                    <span className="text-xs text-zinc-600">мин</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Add Set Button */}
+        <button
+          onClick={addSet}
+          className="w-full py-4 rounded-2xl border-2 border-dashed border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/50 transition-all flex items-center justify-center gap-2 font-medium"
+        >
+          <Plus className="w-5 h-5" />
+          Добавить подход
+        </button>
+
+        {/* Spacer for bottom button */}
+        <div className="h-24" />
       </div>
 
-      {/* Sticky bottom: Finish exercise — shadow, above keyboard */}
-      <div className="mt-auto p-4 max-w-lg mx-auto w-full flex items-center gap-3 border-t border-neutral-800 bg-neutral-900 pb-[env(safe-area-inset-bottom)]">
+      {/* 3. Bottom Action Bar (Fixed) */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-black to-transparent z-10">
         <button
-          type="button"
-          onClick={handleComplete}
+          onClick={handleFinish}
           disabled={saving}
-          className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-semibold text-white shadow-lg shadow-blue-900/30"
+          className="w-full py-4 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] transition-all rounded-2xl font-bold text-lg shadow-xl shadow-blue-900/20 text-white flex items-center justify-center gap-2"
         >
-          {saving ? 'Сохранение…' : 'Завершить упражнение'}
+          {saving ? 'Сохранение...' : 'Завершить упражнение'}
         </button>
       </div>
 
+      {/* History Modal (Simple Overlay) */}
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-30" onClick={() => setMenuOpen(false)} />
+          <div className="fixed bottom-0 left-0 right-0 bg-zinc-900 rounded-t-3xl z-40 p-6 space-y-4 border-t border-zinc-800 pb-10">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-bold text-xl">Меню</h3>
+              <button onClick={() => setMenuOpen(false)}><X className="text-zinc-500" /></button>
+            </div>
+
+            <button
+              onClick={() => { setHistoryOpen(true); setMenuOpen(false); }}
+              className="w-full p-4 bg-zinc-800 rounded-xl flex items-center gap-3 hover:bg-zinc-700"
+            >
+              <History className="w-5 h-5 text-blue-400" />
+              <span className="font-medium">История подходов</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Full Screen History View */}
       {historyOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
-              <h3 className="font-medium">История упражнения</h3>
-              <button onClick={() => setHistoryOpen(false)} className="text-zinc-400 hover:text-white">Закрыть</button>
-            </div>
-            <div className="p-4 overflow-auto max-h-[65vh]">
-              {historyLoading ? (
-                <p className="text-zinc-500">Загрузка...</p>
-              ) : historyRows.length === 0 ? (
-                <p className="text-zinc-500">История пуста</p>
-              ) : (
-                <ul className="space-y-2">
-                  {historyRows.map((row) => (
-                    <li key={row.id} className="p-3 rounded-xl bg-zinc-800/60 text-sm">
-                      <div className="flex justify-between">
-                        <span>{formatDateShort(row.createdAt)}</span>
-                        <span>{row.weight} кг x {row.reps}</span>
-                      </div>
-                      <div className="text-zinc-400 text-xs mt-1">
-                        {row.rpe != null && <>RPE: {row.rpe} · </>}
-                        {row.restSeconds != null && <>Отдых: {row.restSeconds}s · </>}
-                        {row.oneRm != null && <>1RM: {Math.round(row.oneRm)} · </>}
-                        {row.effectiveLoad != null && <>Eff: {Math.round(row.effectiveLoad)}</>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <header className="p-4 border-b border-zinc-800 flex items-center gap-3">
+            <button onClick={() => setHistoryOpen(false)}><ChevronLeft /></button>
+            <h2 className="font-bold">История</h2>
+          </header>
+          <div className="flex-1 overflow-auto p-4 no-scrollbar">
+            {historyRows.map(row => (
+              <div key={row.id} className="mb-3 p-3 bg-zinc-900 rounded-lg border border-zinc-800">
+                <div className="flex justify-between text-sm text-zinc-400 mb-1">
+                  <span>{new Date(row.createdAt).toLocaleDateString()}</span>
+                  {row.oneRm != null && <span className="text-emerald-500">1RM: {Math.round(row.oneRm)}</span>}
+                </div>
+                <div className="text-xl font-bold text-white">
+                  {row.weight} кг × {row.reps}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {supersetSearchOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b border-zinc-700 flex justify-between items-center">
-              <h3 className="font-medium">Связать упражнение</h3>
-              <button onClick={() => setSupersetSearchOpen(false)} className="text-zinc-400 hover:text-white">Закрыть</button>
-            </div>
-            <div className="p-4 space-y-3">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-                <input
-                  type="text"
-                  value={supersetQuery}
-                  onChange={(e) => setSupersetQuery(e.target.value)}
-                  placeholder="Найти упражнение..."
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-3 py-2.5"
-                />
-              </div>
-              <div className="max-h-[45vh] overflow-auto">
-                {supersetLoading ? (
-                  <p className="text-zinc-500 text-sm">Поиск...</p>
-                ) : supersetResults.length === 0 ? (
-                  <p className="text-zinc-500 text-sm">Введите минимум 2 символа</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {supersetResults.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSupersetExercise(item);
-                            setSupersetSearchOpen(false);
-                            setSets((prev) => prev.map((s) => ({ ...s, supersetExerciseId: item.id })));
-                          }}
-                          className="w-full text-left p-3 rounded-xl bg-zinc-800/60 hover:bg-zinc-800"
-                        >
-                          <div className="font-medium">{item.nameRu}</div>
-                          {!!item.nameEn && <div className="text-xs text-zinc-400">{item.nameEn}</div>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
