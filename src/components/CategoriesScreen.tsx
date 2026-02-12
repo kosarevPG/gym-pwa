@@ -1,12 +1,25 @@
 import { useState, useMemo } from 'react';
-import { ChevronRight, Search, BarChart3, RotateCw, X } from 'lucide-react';
-import { ScreenHeader } from './ScreenHeader';
+import { Search, X } from 'lucide-react';
 import { CATEGORIES } from '../data/categories';
 import type { Category } from '../types';
 
 interface CategoriesScreenProps {
   onClose: () => void;
   onSelectCategory: (category: Category) => void;
+}
+
+/** Плейсхолдер под иконку категории (картинку вставишь позже через background-image или <img>) */
+function CategoryIcon({ slug }: { slug: string }) {
+  return (
+    <div
+      className="w-full h-full rounded-full bg-zinc-700/80 flex items-center justify-center text-zinc-400 text-3xl overflow-hidden"
+      role="img"
+      aria-hidden
+    >
+      {/* Подставь сюда img или background: url(public/images/categories/{slug}.png) */}
+      <span className="opacity-60">🏋️</span>
+    </div>
+  );
 }
 
 export function CategoriesScreen({ onClose, onSelectCategory }: CategoriesScreenProps) {
@@ -29,53 +42,42 @@ export function CategoriesScreen({ onClose, onSelectCategory }: CategoriesScreen
             <X className="w-5 h-5" />
             <span>Закрыть</span>
           </button>
-          <div className="flex items-center gap-2">
-            <button className="p-2 text-zinc-400 hover:text-white rounded-lg" aria-label="Фильтр">
-              <BarChart3 className="w-5 h-5" />
-            </button>
-            <button className="p-2 text-zinc-400 hover:text-white rounded-lg" aria-label="Обновить">
-              <RotateCw className="w-5 h-5" />
-            </button>
-          </div>
+          <button className="p-2 text-zinc-400 hover:text-white rounded-full" aria-label="Поиск">
+            <Search className="w-5 h-5" />
+          </button>
         </div>
-
-        <div className="px-4 pb-4 flex items-center gap-2">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+        <div className="px-4 pb-3">
+          <h1 className="text-xl font-bold">Библиотека упражнений</h1>
+          <div className="mt-2 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input
               type="text"
               placeholder="Найти..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-10 pr-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-zinc-600"
+              className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
-          <button className="p-2 text-zinc-400 hover:text-white rounded-lg" aria-label="Фильтр">
-            <BarChart3 className="w-5 h-5" />
-          </button>
-          <button className="p-2 text-zinc-400 hover:text-white rounded-lg" aria-label="Обновить">
-            <RotateCw className="w-5 h-5" />
-          </button>
         </div>
       </div>
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
-        <ul className="space-y-2">
+        {/* Крупная сетка категорий 3 колонки, как в примере */}
+        <div className="grid grid-cols-3 gap-4 sm:gap-5">
           {filtered.map((cat) => (
-            <li key={cat.slug}>
-              <button
-                onClick={() => onSelectCategory(cat)}
-                className="w-full flex items-center gap-4 p-4 bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/50 rounded-2xl text-left transition-colors active:scale-[0.99]"
-              >
-                <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-zinc-700/80 flex items-center justify-center">
-                  <span className="text-zinc-400 text-lg">🏋️</span>
-                </div>
-                <span className="flex-1 font-medium text-white">{cat.name}</span>
-                <ChevronRight className="w-5 h-5 text-zinc-500 flex-shrink-0" />
-              </button>
-            </li>
+            <button
+              key={cat.slug}
+              type="button"
+              onClick={() => onSelectCategory(cat)}
+              className="flex flex-col items-center gap-2 active:scale-[0.98] transition-transform"
+            >
+              <div className="w-full aspect-square max-w-[120px] sm:max-w-[140px] rounded-full overflow-hidden bg-zinc-800/80 border-2 border-zinc-700/50 hover:border-zinc-600 flex items-center justify-center">
+                <CategoryIcon slug={cat.slug} />
+              </div>
+              <span className="text-sm font-medium text-white text-center leading-tight">{cat.name}</span>
+            </button>
           ))}
-        </ul>
+        </div>
         {filtered.length === 0 && (
           <p className="text-center text-zinc-500 py-8">Ничего не найдено</p>
         )}
