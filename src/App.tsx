@@ -44,6 +44,19 @@ export default function App() {
     setExercisesRefreshTrigger((t) => t + 1);
   }, []);
 
+  const handleCategorySelect = useCallback(
+    (category: Category) => {
+      if (addFromCategoriesMode) {
+        setSelectedCategory(category);
+        setScreen('add-exercise');
+        setAddFromCategoriesMode(false);
+      } else {
+        openExercises(category);
+      }
+    },
+    [addFromCategoriesMode, openExercises]
+  );
+
   if (screen === 'add-exercise' && selectedCategory) {
     return (
       <AddExerciseScreen
@@ -89,19 +102,6 @@ export default function App() {
       />
     );
   }
-
-  const handleCategorySelect = useCallback(
-    (category: Category) => {
-      if (addFromCategoriesMode) {
-        setSelectedCategory(category);
-        setScreen('add-exercise');
-        setAddFromCategoriesMode(false);
-      } else {
-        openExercises(category);
-      }
-    },
-    [addFromCategoriesMode, openExercises]
-  );
 
   return (
     <CategoriesScreen
