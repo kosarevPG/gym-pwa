@@ -8,16 +8,22 @@ interface CategoriesScreenProps {
   onSelectCategory: (category: Category) => void;
 }
 
-/** Плейсхолдер под иконку категории (картинку вставишь позже через background-image или <img>) */
+/** Слоги категорий, для которых есть SVG в public/icons/categories/ */
+const CATEGORY_ICON_SLUGS = ['back', 'chest', 'shoulders', 'biceps', 'legs', 'triceps'] as const;
+
 function CategoryIcon({ slug }: { slug: string }) {
+  const baseUrl = import.meta.env.BASE_URL || '/';
+  const iconUrl = CATEGORY_ICON_SLUGS.includes(slug as (typeof CATEGORY_ICON_SLUGS)[number])
+    ? `${baseUrl}icons/categories/${slug}.svg`
+    : null;
+
   return (
-    <div
-      className="w-full h-full rounded-full bg-zinc-700/80 flex items-center justify-center text-zinc-400 text-3xl overflow-hidden"
-      role="img"
-      aria-hidden
-    >
-      {/* Подставь сюда img или background: url(public/images/categories/{slug}.png) */}
-      <span className="opacity-60">🏋️</span>
+    <div className="w-full h-full rounded-full bg-zinc-700/80 flex items-center justify-center overflow-hidden">
+      {iconUrl ? (
+        <img src={iconUrl} alt="" className="w-full h-full object-contain p-1" />
+      ) : (
+        <span className="text-zinc-400 text-3xl opacity-60" aria-hidden>🏋️</span>
+      )}
     </div>
   );
 }
