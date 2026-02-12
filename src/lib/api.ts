@@ -387,6 +387,49 @@ export async function fetchLastExerciseSnapshot(exerciseId: string): Promise<Las
   };
 }
 
+/** Один подход из последней сессии (для подстановки при открытии упражнения). */
+export interface LastSessionSetRow {
+  inputWeight: string;
+  reps: string;
+  restMin: string;
+}
+
+/**
+ * Подтягивает последнюю завершённую серию подходов по упражнению.
+ * Вес — то, что вводил пользователь (input_wt), иначе эффективный weight в кг.
+ */
+export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<LastSessionSetRow[]> {
+  const select = 'set_group_id, order_index, weight, reps, rest_seconds, input_wt, created_at';
+  const { data, error } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(select)
+    .eq('exercise_id', exerciseId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error || !data?.length) return [];
+
+  const rows = data as Array<{
+    set_group_id: string;
+    order_index: number;
+    weight: number;
+    reps: number;
+    rest_seconds?: number | null;
+    input_wt?: number | null;
+    created_at: string;
+  }>;
+
+  const lastGroupId = rows[0].set_group_id;
+  const sessionRows = rows.filter((r) => r.set_group_id === lastGroupId);
+  sessionRows.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
+  return sessionRows.map((r) => ({
+    inputWeight: r.input_wt != null && !Number.isNaN(r.input_wt) ? String(r.input_wt) : String(r.weight ?? 0),
+    reps: String(r.reps ?? 0),
+    restMin: r.rest_seconds != null ? String(Math.round(r.rest_seconds / 60)) : '2',
+  }));
+}
+
 export async function fetchPersonalBestWeight(exerciseId: string): Promise<number | null> {
   const { data, error } = await supabase
     .from(TRAINING_LOGS_TABLE)

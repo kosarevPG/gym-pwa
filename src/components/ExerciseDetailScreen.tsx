@@ -4,9 +4,9 @@ import {
   saveTrainingLogs,
   fetchExerciseHistory,
   fetchLastExerciseSnapshot,
+  fetchLastExerciseSessionSets,
   fetchPersonalBestWeight,
   fetchLatestBodyWeight,
-  searchExercises,
   type ExerciseHistoryRow,
 } from '../lib/api';
 import { WEIGHT_FORMULAS, getWeightInputType, allows1rm } from '../exerciseConfig';
@@ -81,6 +81,21 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
       setBodyWeight(bw);
     });
     fetchExerciseHistory(exercise.id, 10).then(setHistoryRows);
+
+    // Подтянуть последнюю серию подходов (вес/повторы/отдых) при открытии упражнения
+    fetchLastExerciseSessionSets(exercise.id).then((lastSets) => {
+      if (lastSets.length === 0) return;
+      const newSets: WorkoutSet[] = lastSets.map((row, i) => {
+        const set = createSet(i + 1);
+        return {
+          ...set,
+          inputWeight: row.inputWeight,
+          reps: row.reps,
+          restMin: row.restMin,
+        };
+      });
+      setSets(newSets);
+    });
   }, [exercise.id]);
 
   // Таймер
