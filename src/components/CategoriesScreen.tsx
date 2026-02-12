@@ -1,15 +1,16 @@
 import { useState, useMemo } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { ScreenHeader } from './ScreenHeader';
 import { CATEGORIES } from '../data/categories';
 import type { Category } from '../types';
 
 interface CategoriesScreenProps {
-  onClose: () => void;
+  onBack: () => void;
   onSelectCategory: (category: Category) => void;
 }
 
 /** Слоги категорий, для которых есть SVG в public/icons/categories/ */
-const CATEGORY_ICON_SLUGS = ['back', 'chest', 'shoulders', 'biceps', 'legs', 'triceps'] as const;
+const CATEGORY_ICON_SLUGS = ['back', 'chest', 'shoulders', 'biceps', 'legs', 'triceps', 'abs', 'cardio', 'calves'] as const;
 
 function CategoryIcon({ slug }: { slug: string }) {
   const baseUrl = import.meta.env.BASE_URL || '/';
@@ -28,7 +29,7 @@ function CategoryIcon({ slug }: { slug: string }) {
   );
 }
 
-export function CategoriesScreen({ onClose, onSelectCategory }: CategoriesScreenProps) {
+export function CategoriesScreen({ onBack, onSelectCategory }: CategoriesScreenProps) {
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -39,31 +40,17 @@ export function CategoriesScreen({ onClose, onSelectCategory }: CategoriesScreen
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <div className="sticky top-0 z-30 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800">
-        <div className="p-4 flex items-center justify-between gap-3">
-          <button
-            onClick={onClose}
-            className="flex items-center gap-2 text-zinc-300 hover:text-white active:opacity-80"
-          >
-            <X className="w-5 h-5" />
-            <span>Закрыть</span>
-          </button>
-          <button className="p-2 text-zinc-400 hover:text-white rounded-full" aria-label="Поиск">
-            <Search className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="px-4 pb-3">
-          <h1 className="text-xl font-bold">Библиотека упражнений</h1>
-          <div className="mt-2 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-            <input
-              type="text"
-              placeholder="Найти..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-            />
-          </div>
+      <ScreenHeader title="Упражнения" onBack={onBack} />
+      <div className="px-4 pb-3 pt-1 border-b border-zinc-800">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input
+            type="text"
+            placeholder="Найти..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
         </div>
       </div>
 

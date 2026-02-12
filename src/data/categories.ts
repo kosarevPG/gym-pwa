@@ -9,6 +9,7 @@ export const CATEGORIES: Category[] = [
   { slug: 'biceps', name: 'Бицепс' },
   { slug: 'abs', name: 'Пресс' },
   { slug: 'cardio', name: 'Кардио' },
+  { slug: 'calves', name: 'Икры' },
 ];
 
 export function getCategoryBySlug(slug: CategorySlug): Category | undefined {

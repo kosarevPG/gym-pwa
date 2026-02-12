@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Loader2, Search } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
 import { getCategoryBySlug } from '../data/categories';
 import { fetchExercises } from '../lib/api';
@@ -61,6 +61,7 @@ export function ExerciseListScreen({
 }: ExerciseListScreenProps) {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -74,24 +75,44 @@ export function ExerciseListScreen({
     return () => { cancelled = true; };
   }, [category.slug, refreshTrigger]);
 
+  const filteredExercises = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return exercises;
+    return exercises.filter(
+      (ex) =>
+        (ex.nameRu && ex.nameRu.toLowerCase().includes(q)) ||
+        (ex.nameEn && ex.nameEn.toLowerCase().includes(q))
+    );
+  }, [exercises, search]);
+
   const categoryName = getCategoryBySlug(category.slug)?.name ?? category.name;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <ScreenHeader
-        title={categoryName}
-        onBack={onBack}
-        rightAction={(
+      <ScreenHeader title={categoryName} onBack={onBack} />
+      {/* Поиск по названию (RU/EN) и кнопка добавления в шапке */}
+      <div className="sticky top-0 z-20 bg-zinc-950/95 backdrop-blur-md border-b border-zinc-800 px-4 pb-3 pt-1">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Поиск по названию..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-zinc-800/80 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
+          </div>
           <button
             type="button"
             onClick={onAddExercise}
-            className="p-2 text-zinc-300 hover:text-white rounded-lg border border-zinc-700/60 bg-zinc-900/60"
+            className="flex-shrink-0 p-2.5 text-zinc-300 hover:text-white rounded-xl border border-zinc-700/60 bg-zinc-900/60"
             aria-label="Добавить упражнение"
           >
             <Plus className="w-5 h-5" />
           </button>
-        )}
-      />
+        </div>
+      </div>
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -99,22 +120,17 @@ export function ExerciseListScreen({
           </div>
         ) : (
           <>
-            {/* Сетка 2 колонки с крупными карточками (как в примере «Все упражнения») */}
             <div className="grid grid-cols-2 gap-4">
-              {exercises.map((ex) => (
+              {filteredExercises.map((ex) => (
                 <ExerciseCard key={ex.id} exercise={ex} onClick={() => onSelectExercise(ex)} />
               ))}
             </div>
-            <button
-              type="button"
-              onClick={onAddExercise}
-              className="mt-6 w-full flex items-center justify-center gap-2 py-4 bg-zinc-800/60 hover:bg-zinc-800 border border-dashed border-zinc-600 rounded-2xl text-zinc-400 hover:text-white transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Добавить своё упражнение
-            </button>
-            {!loading && exercises.length === 0 && (
-              <p className="text-center text-zinc-500 py-8">Пока нет упражнений. Добавьте первое выше.</p>
+            {!loading && filteredExercises.length === 0 && (
+              <p className="text-center text-zinc-500 py-8">
+                {exercises.length === 0
+                  ? 'Пока нет упражнений. Добавьте первое кнопкой выше.'
+                  : 'Ничего не найдено по запросу.'}
+              </p>
             )}
           </>
         )}

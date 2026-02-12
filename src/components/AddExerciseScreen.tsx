@@ -48,6 +48,7 @@ function mapCategoryToBodyPart(category: Category['slug']): BodyPart {
     biceps: 'BICEPS',
     abs: 'ABS',
     cardio: 'CARDIO',
+    calves: 'OTHER',
   };
   return map[category] ?? 'OTHER';
 }

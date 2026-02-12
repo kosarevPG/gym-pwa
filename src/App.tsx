@@ -91,7 +91,7 @@ export default function App() {
 
   return (
     <CategoriesScreen
-      onClose={() => setScreen('home')}
+      onBack={() => setScreen('home')}
       onSelectCategory={openExercises}
     />
   );
