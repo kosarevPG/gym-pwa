@@ -39,7 +39,20 @@ export function ExerciseListScreen({
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
-      <ScreenHeader title={categoryName} onBack={onBack} />
+      <ScreenHeader
+        title={categoryName}
+        onBack={onBack}
+        rightAction={(
+          <button
+            type="button"
+            onClick={onAddExercise}
+            className="p-2 text-zinc-300 hover:text-white rounded-lg border border-zinc-700/60 bg-zinc-900/60"
+            aria-label="Добавить упражнение"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        )}
+      />
       <main className="flex-1 p-4 max-w-lg mx-auto w-full">
         {loading ? (
           <div className="flex items-center justify-center py-12">

@@ -1,8 +1,20 @@
 export type CategorySlug = 'back' | 'legs' | 'chest' | 'shoulders' | 'triceps' | 'biceps' | 'abs' | 'cardio';
+export type BodyPart = 'CHEST' | 'BACK' | 'LEGS' | 'SHOULDERS' | 'TRICEPS' | 'BICEPS' | 'ABS' | 'CARDIO' | 'FULL_BODY' | 'OTHER';
+export type InputMode = 'WEIGHT_REPS' | 'DISTANCE_TIME' | 'TIME_ONLY' | 'REPS_ONLY';
+export type BodyweightType = 'NONE' | 'WEIGHTED' | 'ASSISTED';
+export type ExerciseWeightType = 'barbell' | 'dumbbell' | 'machine' | 'bodyweight' | 'standard';
 
 export interface Category {
   slug: CategorySlug;
   name: string;
+}
+
+export interface Equipment {
+  id: string;
+  code: string;
+  nameRu: string;
+  nameEn: string;
+  defaultWeightStep?: number;
 }
 
 export interface Exercise {
@@ -10,9 +22,21 @@ export interface Exercise {
   category: CategorySlug;
   nameRu: string;
   nameEn: string;
-  weightType?: 'barbell' | 'dumbbell' | 'machine' | 'bodyweight' | 'standard';
+  weightType?: ExerciseWeightType;
   baseWeight?: number;
   targetWeightKg?: number;
+  description?: string;
+  mediaUrls?: string[];
+  bodyPart?: BodyPart;
+  equipmentId?: string | null;
+  inputMode?: InputMode;
+  bodyweightType?: BodyweightType;
+  isUnilateral?: boolean;
+  simultaneous?: boolean;
+  weightStep?: number;
+  defaultRestSeconds?: number;
+  isCompound?: boolean;
+  hiddenFromStats?: boolean;
 }
 
 export interface WorkoutSet {

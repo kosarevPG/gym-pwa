@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { ScreenHeader } from './ScreenHeader';
-import { addExercise } from '../lib/api';
+import { addExercise, fetchEquipmentOptions } from '../lib/api';
 import { getCategoryBySlug } from '../data/categories';
-import type { Category, Exercise } from '../types';
+import type { BodyPart, BodyweightType, Category, Equipment, Exercise, InputMode } from '../types';
 
 const WEIGHT_TYPES: { value: Exercise['weightType']; label: string }[] = [
   { value: 'barbell', label: 'Штанга (×1 блин)' },
@@ -12,6 +11,46 @@ const WEIGHT_TYPES: { value: Exercise['weightType']; label: string }[] = [
   { value: 'bodyweight', label: 'Свой вес' },
   { value: 'standard', label: 'Кг' },
 ];
+
+const INPUT_MODE_OPTIONS: { value: InputMode; label: string }[] = [
+  { value: 'WEIGHT_REPS', label: 'Вес + Повт' },
+  { value: 'DISTANCE_TIME', label: 'Дистанция + Время' },
+  { value: 'TIME_ONLY', label: 'Только время' },
+  { value: 'REPS_ONLY', label: 'Только повторы' },
+];
+
+const BODYWEIGHT_TYPE_OPTIONS: { value: BodyweightType; label: string }[] = [
+  { value: 'NONE', label: 'Обычный вес' },
+  { value: 'WEIGHTED', label: 'С дополнительным весом' },
+  { value: 'ASSISTED', label: 'С ассистом (гравитрон)' },
+];
+
+const BODY_PART_OPTIONS: { value: BodyPart; label: string }[] = [
+  { value: 'CHEST', label: 'Грудь' },
+  { value: 'BACK', label: 'Спина' },
+  { value: 'LEGS', label: 'Ноги' },
+  { value: 'SHOULDERS', label: 'Плечи' },
+  { value: 'TRICEPS', label: 'Трицепс' },
+  { value: 'BICEPS', label: 'Бицепс' },
+  { value: 'ABS', label: 'Пресс' },
+  { value: 'CARDIO', label: 'Кардио' },
+  { value: 'FULL_BODY', label: 'Full Body' },
+  { value: 'OTHER', label: 'Другое' },
+];
+
+function mapCategoryToBodyPart(category: Category['slug']): BodyPart {
+  const map: Record<Category['slug'], BodyPart> = {
+    chest: 'CHEST',
+    back: 'BACK',
+    legs: 'LEGS',
+    shoulders: 'SHOULDERS',
+    triceps: 'TRICEPS',
+    biceps: 'BICEPS',
+    abs: 'ABS',
+    cardio: 'CARDIO',
+  };
+  return map[category] ?? 'OTHER';
+}
 
 interface AddExerciseScreenProps {
   category: Category;
@@ -22,13 +61,36 @@ interface AddExerciseScreenProps {
 export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseScreenProps) {
   const [nameRu, setNameRu] = useState('');
   const [nameEn, setNameEn] = useState('');
+  const [description, setDescription] = useState('');
+  const [mediaUrlsRaw, setMediaUrlsRaw] = useState('');
   const [weightType, setWeightType] = useState<Exercise['weightType']>('barbell');
+  const [bodyPart, setBodyPart] = useState<BodyPart>(mapCategoryToBodyPart(category.slug));
+  const [inputMode, setInputMode] = useState<InputMode>('WEIGHT_REPS');
+  const [bodyweightType, setBodyweightType] = useState<BodyweightType>('NONE');
+  const [isUnilateral, setIsUnilateral] = useState(false);
+  const [simultaneous, setSimultaneous] = useState(false);
   const [baseWeight, setBaseWeight] = useState('');
   const [targetWeightKg, setTargetWeightKg] = useState('');
+  const [weightStep, setWeightStep] = useState('');
+  const [defaultRestSeconds, setDefaultRestSeconds] = useState('120');
+  const [isCompound, setIsCompound] = useState(true);
+  const [hiddenFromStats, setHiddenFromStats] = useState(false);
+  const [equipmentId, setEquipmentId] = useState('');
+  const [equipmentOptions, setEquipmentOptions] = useState<Equipment[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const categoryName = getCategoryBySlug(category.slug)?.name ?? category.name;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEquipmentOptions().then((options) => {
+      if (!cancelled) {
+        setEquipmentOptions(options);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,10 +101,28 @@ export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseSc
     }
     setError(null);
     setSaving(true);
+
+    const mediaUrls = mediaUrlsRaw
+      .split(/[\n,]/)
+      .map((u) => u.trim())
+      .filter(Boolean);
+
     const { data, error: err } = await addExercise({
       category: category.slug,
       nameRu: trimmed,
       nameEn: nameEn.trim() || undefined,
+      description: description.trim() || undefined,
+      mediaUrls: mediaUrls.length ? mediaUrls : undefined,
+      bodyPart,
+      equipmentId: equipmentId || undefined,
+      inputMode,
+      bodyweightType,
+      isUnilateral,
+      simultaneous,
+      weightStep: weightStep === '' ? undefined : parseFloat(weightStep),
+      defaultRestSeconds: defaultRestSeconds === '' ? undefined : parseInt(defaultRestSeconds, 10),
+      isCompound,
+      hiddenFromStats,
       weightType,
       baseWeight: baseWeight === '' ? undefined : parseFloat(baseWeight),
       targetWeightKg: targetWeightKg === '' ? undefined : parseFloat(targetWeightKg),
@@ -88,6 +168,79 @@ export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseSc
           />
         </div>
         <div>
+          <label className="block text-zinc-400 text-sm mb-1">Описание</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Короткая инструкция по технике"
+            rows={3}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-zinc-400 text-sm mb-1">Медиа URL (через запятую или с новой строки)</label>
+          <textarea
+            value={mediaUrlsRaw}
+            onChange={(e) => setMediaUrlsRaw(e.target.value)}
+            placeholder="https://.../video.mp4"
+            rows={2}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-zinc-400 text-sm mb-1">Мышечная группа</label>
+            <select
+              value={bodyPart}
+              onChange={(e) => setBodyPart(e.target.value as BodyPart)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {BODY_PART_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-zinc-400 text-sm mb-1">Оборудование</label>
+            <select
+              value={equipmentId}
+              onChange={(e) => setEquipmentId(e.target.value)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Не выбрано</option>
+              {equipmentOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>{opt.nameRu || opt.code}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-zinc-400 text-sm mb-1">Режим ввода</label>
+            <select
+              value={inputMode}
+              onChange={(e) => setInputMode(e.target.value as InputMode)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {INPUT_MODE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-zinc-400 text-sm mb-1">Тип bodyweight</label>
+            <select
+              value={bodyweightType}
+              onChange={(e) => setBodyweightType(e.target.value as BodyweightType)}
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {BODYWEIGHT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
           <label className="block text-zinc-400 text-sm mb-1">Тип веса</label>
           <select
             value={weightType}
@@ -126,6 +279,49 @@ export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseSc
               className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-zinc-400 text-sm mb-1">Шаг веса (кг)</label>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              value={weightStep}
+              onChange={(e) => setWeightStep(e.target.value)}
+              placeholder="2.5"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-zinc-400 text-sm mb-1">Отдых по умолч. (сек)</label>
+            <input
+              type="number"
+              min="0"
+              value={defaultRestSeconds}
+              onChange={(e) => setDefaultRestSeconds(e.target.value)}
+              placeholder="120"
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-800/60 border border-zinc-700 rounded-xl px-3 py-2">
+            <input type="checkbox" checked={isUnilateral} onChange={(e) => setIsUnilateral(e.target.checked)} />
+            Unilateral (L/R)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-800/60 border border-zinc-700 rounded-xl px-3 py-2">
+            <input type="checkbox" checked={simultaneous} onChange={(e) => setSimultaneous(e.target.checked)} />
+            Simultaneous (×2)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-800/60 border border-zinc-700 rounded-xl px-3 py-2">
+            <input type="checkbox" checked={isCompound} onChange={(e) => setIsCompound(e.target.checked)} />
+            Базовое (compound)
+          </label>
+          <label className="flex items-center gap-2 text-sm text-zinc-300 bg-zinc-800/60 border border-zinc-700 rounded-xl px-3 py-2">
+            <input type="checkbox" checked={hiddenFromStats} onChange={(e) => setHiddenFromStats(e.target.checked)} />
+            Скрыть из статистики
+          </label>
         </div>
         <button
           type="submit"
