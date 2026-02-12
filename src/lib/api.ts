@@ -384,7 +384,7 @@ export async function fetchLastExerciseSnapshot(exerciseId: string): Promise<Las
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
-    .order('completed_at', { ascending: false })
+    .order('completed_at', { ascending: false, nullsFirst: false })
     .limit(100);
 
   if (error || !data?.length) return null;
@@ -418,7 +418,7 @@ export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
-    .order('completed_at', { ascending: false })
+    .order('completed_at', { ascending: false, nullsFirst: false })
     .limit(50);
 
   if (error || !data?.length) return [];
