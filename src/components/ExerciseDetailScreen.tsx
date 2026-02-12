@@ -14,6 +14,7 @@ import { WEIGHT_FORMULAS, getWeightInputType, allows1rm } from '../exerciseConfi
 import { calc1RM } from '../utils';
 import type { Exercise as ExerciseType, WorkoutSet } from '../types';
 import type { WeightInputType } from '../exerciseConfig';
+import { calcSideMult, median } from '../lib/metrics';
 
 interface ExerciseDetailScreenProps {
   exercise: ExerciseType;
@@ -48,6 +49,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
     restAfterSeconds: undefined,
     doneAt: undefined,
     supersetExerciseId: null,
+    side: 'both',
     completed: false,
     order,
   }), [exercise.id, exercise.defaultRestSeconds]);
@@ -72,7 +74,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
   const weightType = getWeightType(exercise);
   const weightLabel = WEIGHT_FORMULAS[weightType]?.label ?? '×1 блин';
   const show1rm = allows1rm(weightType);
-  const multiplier = exercise.simultaneous ? 2 : 1;
+  const showSideControl = weightType === 'dumbbell' || !!exercise.isUnilateral;
 
   useEffect(() => {
     Promise.all([
@@ -84,6 +86,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
       setPersonalBest(pb);
       setBodyWeight(bw);
     });
+    fetchExerciseHistory(exercise.id, 40).then(setHistoryRows);
   }, [exercise.id]);
 
   useEffect(() => {
@@ -160,17 +163,19 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
     const totalKg = calcTotalKg(set.inputWeight, weightType, exercise.baseWeight);
     const weightFor1rm = (totalKg != null && totalKg > 0) ? totalKg : (bodyWeight ?? 0);
     const oneRm = repsNum > 0 ? calc1RM(weightFor1rm, repsNum) : 0;
-    const volume = ((totalKg ?? 0) * repsNum * multiplier);
+    const sideMult = calcSideMult(exercise.weightType ?? 'standard', set.side ?? 'both');
+    const volume = ((totalKg ?? 0) * repsNum * sideMult);
     const effectiveLoad = volume * (rpeNum > 0 ? (rpeNum / 10) : 0);
     return {
       repsNum,
       rpeNum,
       totalKg,
       oneRm,
+      sideMult,
       volume,
       effectiveLoad,
     };
-  }, [weightType, exercise.baseWeight, bodyWeight, multiplier]);
+  }, [weightType, exercise.baseWeight, bodyWeight, exercise.weightType]);
 
   const sessionTotals = useMemo(() => {
     return sets.reduce((acc, s) => {
@@ -180,6 +185,38 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
       return acc;
     }, { volume: 0, effective: 0 });
   }, [sets, calcSetAnalytics]);
+
+  const todayMedianSetVolume = useMemo(() => {
+    const vols = sets.map((s) => calcSetAnalytics(s).volume).filter((v) => v > 0);
+    return median(vols);
+  }, [sets, calcSetAnalytics]);
+
+  const baselineMedianSetVolume = useMemo(() => {
+    const vols = historyRows
+      .map((h) => (h.volume != null ? h.volume : h.weight * h.reps))
+      .filter((v) => v > 0);
+    return median(vols);
+  }, [historyRows]);
+
+  const baselineRatio = useMemo(() => {
+    if (!todayMedianSetVolume || !baselineMedianSetVolume) return null;
+    return todayMedianSetVolume / baselineMedianSetVolume;
+  }, [todayMedianSetVolume, baselineMedianSetVolume]);
+
+  const workingSetRpes = useMemo(() => {
+    return sets
+      .map((s) => parseFloat(s.rpe) || 0)
+      .filter((v) => v > 0);
+  }, [sets]);
+  const deltaRpe = useMemo(() => {
+    if (workingSetRpes.length < 2) return 0;
+    return workingSetRpes[workingSetRpes.length - 1] - workingSetRpes[0];
+  }, [workingSetRpes]);
+
+  const overloadDot = useMemo(() => {
+    if (baselineRatio == null) return false;
+    return deltaRpe >= 1 && baselineRatio < 0.95;
+  }, [deltaRpe, baselineRatio]);
 
   const handleComplete = async () => {
     setSaveError(null);
@@ -194,6 +231,11 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
           reps: analytics.repsNum,
           set_group_id: sessionId,
           order_index: s.order,
+          input_wt: parseFloat(s.inputWeight) || 0,
+          side: s.side ?? 'both',
+          body_wt_snapshot: bodyWeight ?? null,
+          side_mult: analytics.sideMult,
+          set_volume: analytics.volume,
           rpe: analytics.rpeNum || undefined,
           rest_seconds: s.restAfterSeconds ?? targetRestSeconds,
           superset_exercise_id: s.supersetExerciseId ?? supersetExercise?.id ?? null,
@@ -259,12 +301,34 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
                 {personalBest ?? exercise.targetWeightKg} кг
               </span>
             )}
+            {overloadDot && <span className="w-2 h-2 rounded-full bg-red-500 mt-2" title="Fatigue overload" />}
           </div>
           {lastSnapshot && (
             <div className="mt-2 text-xs text-zinc-400 bg-zinc-900/50 rounded-lg px-2 py-1">
               В прошлый раз ({formatDateShort(lastSnapshot.createdAt)}): {lastSnapshot.weight} кг x {lastSnapshot.reps}
             </div>
           )}
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            <div className="bg-zinc-900/50 rounded-lg px-2 py-1">
+              ΔRPE: <span className={deltaRpe >= 1 ? 'text-amber-400' : 'text-zinc-300'}>{deltaRpe >= 0 ? '+' : ''}{deltaRpe.toFixed(1)}</span>
+            </div>
+            <div className="bg-zinc-900/50 rounded-lg px-2 py-1">
+              today vs baseline:{' '}
+              {baselineRatio == null ? (
+                <span className="text-zinc-500">—</span>
+              ) : (
+                <span className={
+                  baselineRatio >= 1.05
+                    ? 'text-emerald-400'
+                    : baselineRatio >= 0.95
+                      ? 'text-zinc-300'
+                      : 'text-amber-400'
+                }>
+                  {(baselineRatio * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
+          </div>
           <div className="mt-2 flex items-center gap-2 text-zinc-500 text-sm">
             <FolderDown className="w-4 h-4" />
             <span>Заметка</span>
@@ -360,7 +424,7 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
                       <div className="text-[10px] text-zinc-500 mt-0.5">
                         {analytics.totalKg != null && `Итого: ${analytics.totalKg} кг`}
                         {show1rm && analytics.oneRm > 0 && (
-                          <span className="block">1PM: {analytics.oneRm}</span>
+                          <span className="block">1RM: {analytics.oneRm}</span>
                         )}
                         <span className="block">Vol: {Math.round(analytics.volume)}</span>
                         <span className="block">Eff: {Math.round(analytics.effectiveLoad)}</span>
@@ -392,6 +456,35 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
                       onChange={(e) => updateSet(set.id, { restAfterSeconds: parseInt(e.target.value || '0', 10) })}
                       className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-2 text-white text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
+                  </div>
+                  <div className="ml-2 flex items-center gap-1">
+                    {[7, 8, 9, 10].map((rpePreset) => (
+                      <button
+                        key={`${set.id}-rpe-${rpePreset}`}
+                        type="button"
+                        onClick={() => updateSet(set.id, { rpe: String(rpePreset) })}
+                        className={`px-1.5 py-1 text-[10px] rounded ${
+                          String(rpePreset) === String(set.rpe)
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-zinc-800 text-zinc-300'
+                        }`}
+                        title={`RPE ${rpePreset}`}
+                      >
+                        {rpePreset}
+                      </button>
+                    ))}
+                    {showSideControl && (
+                      <select
+                        value={set.side ?? 'both'}
+                        onChange={(e) => updateSet(set.id, { side: e.target.value as WorkoutSet['side'] })}
+                        className="bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-[10px]"
+                        title="Сторона"
+                      >
+                        <option value="both">both</option>
+                        <option value="left">left</option>
+                        <option value="right">right</option>
+                      </select>
+                    )}
                   </div>
                   <button
                     type="button"

@@ -3,12 +3,14 @@ import { CategoriesScreen } from './components/CategoriesScreen';
 import { ExerciseListScreen } from './components/ExerciseListScreen';
 import { ExerciseDetailScreen } from './components/ExerciseDetailScreen';
 import { AddExerciseScreen } from './components/AddExerciseScreen';
+import { HomeScreen } from './components/HomeScreen';
+import { AnalyticsScreen } from './components/AnalyticsScreen';
 import type { Category, Exercise } from './types';
 
-type Screen = 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise';
+type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'analytics';
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('categories');
+  const [screen, setScreen] = useState<Screen>('home');
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
@@ -74,9 +76,22 @@ export default function App() {
     );
   }
 
+  if (screen === 'analytics') {
+    return <AnalyticsScreen onBack={() => setScreen('home')} />;
+  }
+
+  if (screen === 'home') {
+    return (
+      <HomeScreen
+        onOpenExercises={openCategories}
+        onOpenAnalytics={() => setScreen('analytics')}
+      />
+    );
+  }
+
   return (
     <CategoriesScreen
-      onClose={() => {}}
+      onClose={() => setScreen('home')}
       onSelectCategory={openExercises}
     />
   );

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { BodyPart, BodyweightType, Equipment, Exercise, ExerciseWeightType, InputMode } from '../types';
+import type { BodyPart, BodyweightType, Equipment, Exercise, ExerciseWeightType, InputMode, SetSide } from '../types';
 
 const EXERCISES_TABLE = 'exercises';
 const EQUIPMENT_TABLE = 'equipment';
@@ -90,12 +90,34 @@ export interface LastExerciseSnapshot {
   reps: number;
 }
 
+export interface TrainingLogRaw {
+  id: string;
+  ts: string;
+  session_id: string;
+  exercise_id: string;
+  set_no: number;
+  reps: number;
+  input_wt: number;
+  side: SetSide;
+  rpe: number;
+  rest_s: number;
+  body_wt_snapshot: number | null;
+  effective_load: number | null;
+  side_mult: number | null;
+  set_volume: number | null;
+}
+
 export interface SaveTrainingLogRow {
   exercise_id: string;
   weight: number;
   reps: number;
   set_group_id: string;
   order_index: number;
+  input_wt?: number;
+  side?: SetSide;
+  body_wt_snapshot?: number | null;
+  side_mult?: number;
+  set_volume?: number;
   rpe?: number;
   rest_seconds?: number;
   superset_exercise_id?: string | null;
@@ -122,6 +144,31 @@ export async function fetchExercises(categorySlug: string): Promise<Exercise[]> 
       .order('name_ru');
     if (legacy.error) {
       console.error('fetchExercises legacy error:', legacy.error);
+      return [];
+    }
+    return (legacy.data ?? [])
+      .filter((row) => isUuid(String(row.id)))
+      .map(mapExerciseRow);
+  }
+
+  return (v2.data ?? [])
+    .filter((row) => isUuid(String(row.id)))
+    .map(mapExerciseRow);
+}
+
+export async function fetchAllExercises(): Promise<Exercise[]> {
+  const v2 = await supabase
+    .from(EXERCISES_TABLE)
+    .select(V2_EXERCISE_SELECT)
+    .order('name_ru');
+
+  if (v2.error) {
+    const legacy = await supabase
+      .from(EXERCISES_TABLE)
+      .select(LEGACY_EXERCISE_SELECT)
+      .order('name_ru');
+    if (legacy.error) {
+      console.error('fetchAllExercises error:', legacy.error);
       return [];
     }
     return (legacy.data ?? [])
@@ -202,6 +249,88 @@ export async function fetchLatestBodyWeight(): Promise<number | null> {
     return null;
   }
   return data.weight_kg != null ? Number(data.weight_kg) : null;
+}
+
+export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw[]> {
+  const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const v2Select = [
+    'id',
+    'completed_at',
+    'created_at',
+    'set_group_id',
+    'exercise_id',
+    'order_index',
+    'reps',
+    'weight',
+    'input_wt',
+    'side',
+    'rpe',
+    'rest_seconds',
+    'body_wt_snapshot',
+    'effective_load',
+    'side_mult',
+    'set_volume',
+  ].join(', ');
+
+  const v2 = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(v2Select)
+    .gte('created_at', sinceIso)
+    .order('created_at', { ascending: false })
+    .limit(5000);
+
+  if (v2.error) {
+    const legacy = await supabase
+      .from(TRAINING_LOGS_TABLE)
+      .select('id, created_at, set_group_id, exercise_id, order_index, reps, weight')
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(5000);
+    if (legacy.error) {
+      console.error('fetchTrainingLogsWindow error:', legacy.error);
+      return [];
+    }
+    return (legacy.data ?? []).map((r) => ({
+      id: String(r.id),
+      ts: String(r.created_at),
+      session_id: String(r.set_group_id),
+      exercise_id: String(r.exercise_id),
+      set_no: Number(r.order_index ?? 0),
+      reps: Number(r.reps ?? 0),
+      input_wt: Number(r.weight ?? 0),
+      side: 'both',
+      rpe: 0,
+      rest_s: 0,
+      body_wt_snapshot: null,
+      effective_load: Number(r.weight ?? 0),
+      side_mult: 1,
+      set_volume: Number(r.weight ?? 0) * Number(r.reps ?? 0),
+    }));
+  }
+
+  return (v2.data ?? []).map((r) => ({
+    // Supabase side может хранить BOTH/LEFT/RIGHT; в UI держим lower-case
+    id: String(r.id),
+    ts: String(r.completed_at ?? r.created_at),
+    session_id: String(r.set_group_id),
+    exercise_id: String(r.exercise_id),
+    set_no: Number(r.order_index ?? 0),
+    reps: Number(r.reps ?? 0),
+    input_wt: Number(r.input_wt ?? r.weight ?? 0),
+    side: ((): SetSide => {
+      const side = String(r.side ?? 'both').toLowerCase();
+      if (side === 'left') return 'left';
+      if (side === 'right') return 'right';
+      return 'both';
+    })(),
+    rpe: Number(r.rpe ?? 0),
+    rest_s: Number(r.rest_seconds ?? 0),
+    body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
+    effective_load: r.effective_load != null ? Number(r.effective_load) : null,
+    side_mult: r.side_mult != null ? Number(r.side_mult) : null,
+    set_volume: r.set_volume != null ? Number(r.set_volume) : null,
+  }));
 }
 
 export async function fetchExerciseHistory(exerciseId: string, limit = 30): Promise<ExerciseHistoryRow[]> {
@@ -366,6 +495,11 @@ export async function saveTrainingLogs(
     reps: Math.floor(Number(r.reps)) || 0,
     set_group_id: String(r.set_group_id),
     order_index: Math.floor(Number(r.order_index)) || 0,
+    input_wt: r.input_wt != null ? Number(r.input_wt) : Number(r.weight),
+    side: (r.side ?? 'both').toUpperCase(),
+    body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
+    side_mult: r.side_mult != null ? Number(r.side_mult) : null,
+    set_volume: r.set_volume != null ? Number(r.set_volume) : (r.volume != null ? Number(r.volume) : null),
     rpe: r.rpe != null ? Number(r.rpe) : null,
     rest_seconds: r.rest_seconds != null ? Math.floor(Number(r.rest_seconds)) : null,
     superset_exercise_id: r.superset_exercise_id && isUuid(r.superset_exercise_id) ? r.superset_exercise_id : null,

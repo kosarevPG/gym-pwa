@@ -3,6 +3,7 @@ export type BodyPart = 'CHEST' | 'BACK' | 'LEGS' | 'SHOULDERS' | 'TRICEPS' | 'BI
 export type InputMode = 'WEIGHT_REPS' | 'DISTANCE_TIME' | 'TIME_ONLY' | 'REPS_ONLY';
 export type BodyweightType = 'NONE' | 'WEIGHTED' | 'ASSISTED';
 export type ExerciseWeightType = 'barbell' | 'dumbbell' | 'machine' | 'bodyweight' | 'standard';
+export type SetSide = 'left' | 'right' | 'both';
 
 export interface Category {
   slug: CategorySlug;
@@ -50,6 +51,10 @@ export interface WorkoutSet {
   restAfterSeconds?: number;
   doneAt?: string;
   supersetExerciseId?: string | null;
+  side?: SetSide;
+  inputWtNumeric?: number;
+  bodyWtSnapshot?: number | null;
+  sideMult?: number;
   completed: boolean;
   order: number;
   /** рассчитанный итого кг */

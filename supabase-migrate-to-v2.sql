@@ -60,6 +60,7 @@ ALTER TABLE exercises
 ALTER TABLE exercises
   ADD COLUMN IF NOT EXISTS description TEXT,
   ADD COLUMN IF NOT EXISTS media_urls TEXT[] NOT NULL DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS external_id TEXT,
   ADD COLUMN IF NOT EXISTS equipment_id UUID REFERENCES equipment(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS is_unilateral BOOLEAN NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS simultaneous BOOLEAN NOT NULL DEFAULT false,
@@ -155,6 +156,7 @@ EXECUTE FUNCTION set_updated_at_timestamp();
 -- Индексы
 CREATE INDEX IF NOT EXISTS idx_exercises_category ON exercises(category);
 CREATE INDEX IF NOT EXISTS idx_exercises_body_part ON exercises(body_part);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_exercises_external_id ON exercises(external_id);
 
 -- RLS + политики (минимум для текущего фронта)
 ALTER TABLE equipment ENABLE ROW LEVEL SECURITY;

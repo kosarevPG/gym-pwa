@@ -1,0 +1,262 @@
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, BarChart3, ChevronLeft, LineChart } from 'lucide-react';
+import { fetchAllExercises, fetchTrainingLogsWindow } from '../lib/api';
+import {
+  buildExerciseProgressAndRisk,
+  buildRampGaps,
+  buildTrainingMetricRows,
+  buildWeeklySeries,
+} from '../lib/analytics';
+import { computeExerciseBaseline, median } from '../lib/metrics';
+import type { Exercise } from '../types';
+
+interface AnalyticsScreenProps {
+  onBack: () => void;
+}
+
+type Tab = 'overview' | 'exercise' | 'ramp';
+
+export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
+  const [tab, setTab] = useState<Tab>('overview');
+  const [loading, setLoading] = useState(true);
+  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [rows, setRows] = useState<ReturnType<typeof buildTrainingMetricRows>>([]);
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const [logs, ex] = await Promise.all([
+        fetchTrainingLogsWindow(120),
+        fetchAllExercises(),
+      ]);
+      if (cancelled) return;
+      const metricRows = buildTrainingMetricRows(logs, ex);
+      setRows(metricRows);
+      setExercises(ex);
+      if (!selectedExerciseId && ex.length > 0) setSelectedExerciseId(ex[0].id);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const weeklySeries = useMemo(() => buildWeeklySeries(rows, 12), [rows]);
+  const trendRows = useMemo(() => buildExerciseProgressAndRisk(rows, exercises), [rows, exercises]);
+  const topProgress = useMemo(
+    () => [...trendRows].sort((a, b) => b.progressPct - a.progressPct).slice(0, 5),
+    [trendRows],
+  );
+  const topRisk = useMemo(
+    () => [...trendRows].sort((a, b) => b.riskScore - a.riskScore).filter((x) => x.riskScore > 0).slice(0, 5),
+    [trendRows],
+  );
+
+  const selectedExerciseRows = useMemo(
+    () => rows.filter((r) => r.exerciseId === selectedExerciseId),
+    [rows, selectedExerciseId],
+  );
+  const selectedExercise = useMemo(
+    () => exercises.find((e) => e.id === selectedExerciseId) ?? null,
+    [exercises, selectedExerciseId],
+  );
+  const selectedBaseline = useMemo(
+    () => computeExerciseBaseline(selectedExerciseRows),
+    [selectedExerciseRows],
+  );
+  const selectedWeekly = useMemo(
+    () => buildWeeklySeries(selectedExerciseRows, 12),
+    [selectedExerciseRows],
+  );
+  const selectedMedianRpe = useMemo(
+    () => median(selectedExerciseRows.map((r) => r.rpe)) ?? 0,
+    [selectedExerciseRows],
+  );
+  const selectedRampCount = useMemo(
+    () => buildRampGaps(selectedExerciseRows).length,
+    [selectedExerciseRows],
+  );
+  const gaps = useMemo(() => buildRampGaps(rows), [rows]);
+
+  const maxSessions = Math.max(1, ...weeklySeries.map((x) => x.sessions));
+  const maxVolume = Math.max(1, ...weeklySeries.map((x) => x.volume));
+  const maxSelectedVolume = Math.max(1, ...selectedWeekly.map((x) => x.volume));
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white">
+      <div className="sticky top-0 z-20 bg-zinc-950/90 backdrop-blur border-b border-zinc-800">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button onClick={onBack} className="p-2 text-zinc-400 hover:text-white">
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold">Аналитика</h1>
+              <p className="text-xs text-zinc-400">горизонт 4–12 недель</p>
+            </div>
+          </div>
+          <div className="text-xs text-zinc-500">логи: {rows.length}</div>
+        </div>
+        <div className="max-w-lg mx-auto px-4 pb-3 flex gap-2">
+          {(['overview', 'exercise', 'ramp'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-3 py-1.5 rounded-lg text-sm ${
+                tab === t ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300'
+              }`}
+            >
+              {t === 'overview' ? 'Обзор' : t === 'exercise' ? 'Упражнение' : 'Вкат/пропуски'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <main className="max-w-lg mx-auto p-4 space-y-4">
+        {loading && <p className="text-zinc-400">Загрузка...</p>}
+
+        {!loading && tab === 'overview' && (
+          <>
+            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <div className="flex items-center gap-2 mb-3"><LineChart className="w-4 h-4" /><h2>Sessions / Week</h2></div>
+              <ul className="space-y-2">
+                {weeklySeries.map((p) => (
+                  <li key={p.weekKey} className="text-sm">
+                    <div className="flex justify-between"><span>{p.label}</span><span>{p.sessions}</span></div>
+                    <div className="h-1.5 bg-zinc-800 rounded overflow-hidden">
+                      <div className="h-full bg-blue-500" style={{ width: `${(p.sessions / maxSessions) * 100}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <div className="flex items-center gap-2 mb-3"><BarChart3 className="w-4 h-4" /><h2>Weekly Total Volume</h2></div>
+              <ul className="space-y-2">
+                {weeklySeries.map((p) => (
+                  <li key={`${p.weekKey}-v`} className="text-sm">
+                    <div className="flex justify-between"><span>{p.label}</span><span>{Math.round(p.volume)}</span></div>
+                    <div className="h-1.5 bg-zinc-800 rounded overflow-hidden">
+                      <div className="h-full bg-emerald-500" style={{ width: `${(p.volume / maxVolume) * 100}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <h3 className="text-sm text-zinc-400 mb-2">Top 5 прогресс baseline</h3>
+              <ul className="space-y-2 text-sm">
+                {topProgress.length === 0 && <li className="text-zinc-500">Недостаточно данных</li>}
+                {topProgress.map((x) => (
+                  <li key={`p-${x.exerciseId}`} className="flex justify-between">
+                    <span className="truncate max-w-[70%]">{x.exerciseName}</span>
+                    <span className={x.progressPct >= 0 ? 'text-emerald-400' : 'text-amber-400'}>
+                      {x.progressPct >= 0 ? '+' : ''}{x.progressPct.toFixed(1)}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <h3 className="text-sm text-zinc-400 mb-2">Top 5 риск перегруза</h3>
+              <ul className="space-y-2 text-sm">
+                {topRisk.length === 0 && <li className="text-zinc-500">Нет активных рисков</li>}
+                {topRisk.map((x) => (
+                  <li key={`r-${x.exerciseId}`} className="flex justify-between">
+                    <span className="truncate max-w-[70%]">{x.exerciseName}</span>
+                    <span className={x.riskScore >= 3 ? 'text-red-400' : 'text-amber-400'}>
+                      {x.riskScore >= 3 ? '🔴 overload' : '🟡 warning'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        )}
+
+        {!loading && tab === 'exercise' && (
+          <>
+            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+              <label className="text-sm text-zinc-400">Упражнение</label>
+              <select
+                value={selectedExerciseId}
+                onChange={(e) => setSelectedExerciseId(e.target.value)}
+                className="w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2"
+              >
+                {exercises.map((ex) => (
+                  <option key={ex.id} value={ex.id}>{ex.nameRu}</option>
+                ))}
+              </select>
+            </section>
+
+            {selectedExercise && (
+              <>
+                <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+                  <h3 className="font-medium mb-2">{selectedExercise.nameRu}</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="bg-zinc-800/60 rounded-lg p-2">
+                      <p className="text-zinc-400 text-xs">baseline median set volume</p>
+                      <p>{selectedBaseline.baselineVolumePerSet != null ? Math.round(selectedBaseline.baselineVolumePerSet) : '—'}</p>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded-lg p-2">
+                      <p className="text-zinc-400 text-xs">baseline weekly volume</p>
+                      <p>{selectedBaseline.baselineWeeklyVolume != null ? Math.round(selectedBaseline.baselineWeeklyVolume) : '—'}</p>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded-lg p-2">
+                      <p className="text-zinc-400 text-xs">median RPE</p>
+                      <p>{selectedMedianRpe.toFixed(1)}</p>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded-lg p-2">
+                      <p className="text-zinc-400 text-xs">ramp flags count</p>
+                      <p>{selectedRampCount}</p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+                  <h4 className="text-sm text-zinc-400 mb-2">Weekly volume trend</h4>
+                  <ul className="space-y-2">
+                    {selectedWeekly.map((p) => (
+                      <li key={`sv-${p.weekKey}`} className="text-sm">
+                        <div className="flex justify-between"><span>{p.label}</span><span>{Math.round(p.volume)}</span></div>
+                        <div className="h-1.5 bg-zinc-800 rounded overflow-hidden">
+                          <div className="h-full bg-violet-500" style={{ width: `${(p.volume / maxSelectedVolume) * 100}%` }} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </>
+            )}
+          </>
+        )}
+
+        {!loading && tab === 'ramp' && (
+          <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="w-4 h-4" />
+              <h2>Разрывы ≥7 дней</h2>
+            </div>
+            {gaps.length === 0 ? (
+              <p className="text-zinc-500 text-sm">Разрывов не найдено</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {gaps.map((g, idx) => (
+                  <li key={`${g.from}-${idx}`} className="p-2 rounded-lg bg-zinc-800/60">
+                    <div>{new Date(g.from).toLocaleDateString('ru-RU')} → {new Date(g.to).toLocaleDateString('ru-RU')}</div>
+                    <div className="text-zinc-400 text-xs">разрыв: {g.days} дней</div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}

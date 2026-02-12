@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS exercises (
   -- 1) Метаданные и контент
   name_ru TEXT NOT NULL,
   name_en TEXT DEFAULT '',
+  external_id TEXT UNIQUE,
   description TEXT,
   media_urls TEXT[] NOT NULL DEFAULT '{}',
   body_part body_part_enum NOT NULL DEFAULT 'OTHER',
@@ -105,7 +106,22 @@ EXECUTE FUNCTION set_updated_at_timestamp();
 -- Логи выполненных упражнений/подходов
 CREATE TABLE IF NOT EXISTS training_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Каноническая модель Set (краткие имена)
+  ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+  session_id TEXT NOT NULL,
   exercise_id UUID NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  set_no INTEGER NOT NULL DEFAULT 0,
+  input_wt NUMERIC NOT NULL DEFAULT 0,
+  side TEXT CHECK (upper(side) IN ('LEFT', 'RIGHT', 'BOTH')) DEFAULT 'BOTH',
+  rpe NUMERIC(4,2),
+  rest_s INTEGER,
+  body_wt_snapshot NUMERIC,
+  effective_load NUMERIC,
+  side_mult NUMERIC(6,2),
+  set_volume NUMERIC,
+
+  -- Совместимость с legacy-кодом
   set_group_id TEXT NOT NULL,                            -- идентификатор тренировки/сессии
   order_index INTEGER NOT NULL DEFAULT 0,
 
@@ -118,8 +134,11 @@ CREATE TABLE IF NOT EXISTS training_logs (
   duration_seconds INTEGER,
 
   -- общие
+  superset_exercise_id UUID REFERENCES exercises(id) ON DELETE SET NULL,
+  one_rm NUMERIC,
+  volume NUMERIC,
+  completed_at TIMESTAMPTZ,
   rest_seconds INTEGER,
-  side TEXT CHECK (side IN ('LEFT', 'RIGHT', 'BOTH')) DEFAULT 'BOTH',
   volume_multiplier NUMERIC(6,2) DEFAULT 1.0,          -- удобно для unilateral/simultaneous
   hidden_from_stats BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -129,6 +148,8 @@ CREATE INDEX IF NOT EXISTS idx_exercises_category ON exercises(category);
 CREATE INDEX IF NOT EXISTS idx_exercises_body_part ON exercises(body_part);
 CREATE INDEX IF NOT EXISTS idx_training_logs_exercise_id ON training_logs(exercise_id);
 CREATE INDEX IF NOT EXISTS idx_training_logs_set_group_id ON training_logs(set_group_id);
+CREATE INDEX IF NOT EXISTS idx_training_logs_session_id ON training_logs(session_id);
+CREATE INDEX IF NOT EXISTS idx_training_logs_ts ON training_logs(ts DESC);
 
 ALTER TABLE equipment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exercises ENABLE ROW LEVEL SECURITY;
