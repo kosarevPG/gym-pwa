@@ -146,15 +146,18 @@ export function markWarmupSets(rows: TrainingMetricRow[]): Array<TrainingMetricR
 }
 
 export function computeAttendancePerWeek(rows: TrainingMetricRow[]): Map<string, number> {
-  const weekSessions = new Map<string, Set<string>>();
+  const weekDays = new Map<string, Set<string>>(); // уникальные даты (YYYY-MM-DD)
+
   rows.forEach((r) => {
     const week = startOfWeekIso(new Date(r.ts));
-    if (!weekSessions.has(week)) weekSessions.set(week, new Set());
-    weekSessions.get(week)!.add(r.sessionId);
+    const dayDate = r.ts.slice(0, 10);
+
+    if (!weekDays.has(week)) weekDays.set(week, new Set());
+    weekDays.get(week)!.add(dayDate);
   });
 
   const counts = new Map<string, number>();
-  Array.from(weekSessions.entries()).forEach(([week, sessions]) => counts.set(week, sessions.size));
+  Array.from(weekDays.entries()).forEach(([week, days]) => counts.set(week, days.size));
   return counts;
 }
 

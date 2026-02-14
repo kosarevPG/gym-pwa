@@ -94,16 +94,16 @@ describe('markWarmupSets', () => {
 });
 
 describe('computeAttendancePerWeek', () => {
-  it('counts unique sessions per week', () => {
+  it('counts unique days (YYYY-MM-DD) per week', () => {
     const rows: TrainingMetricRow[] = [
       row({ ts: '2025-01-06T10:00:00Z', sessionId: 's1' }),
-      row({ ts: '2025-01-06T11:00:00Z', sessionId: 's2' }),
-      row({ ts: '2025-01-13T10:00:00Z', sessionId: 's3' }),
+      row({ ts: '2025-01-06T11:00:00Z', sessionId: 's2' }), // тот же день — 1 день
+      row({ ts: '2025-01-07T10:00:00Z', sessionId: 's3' }), // другой день той же недели
     ];
     const m = computeAttendancePerWeek(rows);
     expect(m.size).toBeGreaterThanOrEqual(1);
     const week1 = m.get('2025-01-06') ?? m.get('2025-01-05');
-    expect(week1).toBe(2);
+    expect(week1).toBe(2); // два уникальных дня: 06 и 07
   });
 });
 
