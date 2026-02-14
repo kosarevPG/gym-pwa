@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ScreenHeader } from './ScreenHeader';
-import { addExercise, fetchEquipmentOptions } from '../lib/api';
+import { addExercise, updateExercise, fetchEquipmentOptions } from '../lib/api';
 import { getCategoryBySlug } from '../data/categories';
 import type { BodyPart, BodyweightType, Category, Equipment, Exercise, InputMode } from '../types';
 
@@ -57,26 +57,50 @@ interface AddExerciseScreenProps {
   category: Category;
   onBack: () => void;
   onSuccess: (exercise: Exercise) => void;
+  /** Режим редактирования: предзаполнить форму и вызывать updateExercise вместо addExercise */
+  initialExercise?: Exercise;
 }
 
-export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseScreenProps) {
-  const [nameRu, setNameRu] = useState('');
-  const [nameEn, setNameEn] = useState('');
-  const [description, setDescription] = useState('');
-  const [mediaUrlsRaw, setMediaUrlsRaw] = useState('');
-  const [weightType, setWeightType] = useState<Exercise['weightType']>('barbell');
-  const [bodyPart, setBodyPart] = useState<BodyPart>(mapCategoryToBodyPart(category.slug));
-  const [inputMode, setInputMode] = useState<InputMode>('WEIGHT_REPS');
-  const [bodyweightType, setBodyweightType] = useState<BodyweightType>('NONE');
-  const [isUnilateral, setIsUnilateral] = useState(false);
-  const [simultaneous, setSimultaneous] = useState(false);
-  const [baseWeight, setBaseWeight] = useState('');
-  const [targetWeightKg, setTargetWeightKg] = useState('');
-  const [weightStep, setWeightStep] = useState('');
-  const [defaultRestSeconds, setDefaultRestSeconds] = useState('120');
-  const [isCompound, setIsCompound] = useState(true);
-  const [hiddenFromStats, setHiddenFromStats] = useState(false);
-  const [equipmentId, setEquipmentId] = useState('');
+export function AddExerciseScreen({ category, onBack, onSuccess, initialExercise }: AddExerciseScreenProps) {
+  const isEdit = Boolean(initialExercise);
+
+  const [nameRu, setNameRu] = useState(initialExercise?.nameRu ?? '');
+  const [nameEn, setNameEn] = useState(initialExercise?.nameEn ?? '');
+  const [description, setDescription] = useState(initialExercise?.description ?? '');
+  const [mediaUrlsRaw, setMediaUrlsRaw] = useState(
+    (initialExercise?.mediaUrls ?? []).join('\n')
+  );
+  const [weightType, setWeightType] = useState<Exercise['weightType']>(
+    initialExercise?.weightType ?? 'barbell'
+  );
+  const [bodyPart, setBodyPart] = useState<BodyPart>(
+    (initialExercise?.bodyPart as BodyPart) ?? mapCategoryToBodyPart(category.slug)
+  );
+  const [inputMode, setInputMode] = useState<InputMode>(
+    (initialExercise?.inputMode as InputMode) ?? 'WEIGHT_REPS'
+  );
+  const [bodyweightType, setBodyweightType] = useState<BodyweightType>(
+    (initialExercise?.bodyweightType as BodyweightType) ?? 'NONE'
+  );
+  const [isUnilateral, setIsUnilateral] = useState(initialExercise?.isUnilateral ?? false);
+  const [simultaneous, setSimultaneous] = useState(initialExercise?.simultaneous ?? false);
+  const [baseWeight, setBaseWeight] = useState(
+    initialExercise?.baseWeight != null ? String(initialExercise.baseWeight) : ''
+  );
+  const [targetWeightKg, setTargetWeightKg] = useState(
+    initialExercise?.targetWeightKg != null ? String(initialExercise.targetWeightKg) : ''
+  );
+  const [weightStep, setWeightStep] = useState(
+    initialExercise?.weightStep != null ? String(initialExercise.weightStep) : ''
+  );
+  const [defaultRestSeconds, setDefaultRestSeconds] = useState(
+    initialExercise?.defaultRestSeconds != null
+      ? String(initialExercise.defaultRestSeconds)
+      : '120'
+  );
+  const [isCompound, setIsCompound] = useState(initialExercise?.isCompound ?? true);
+  const [hiddenFromStats, setHiddenFromStats] = useState(initialExercise?.hiddenFromStats ?? false);
+  const [equipmentId, setEquipmentId] = useState(initialExercise?.equipmentId ?? '');
   const [equipmentOptions, setEquipmentOptions] = useState<Equipment[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +132,7 @@ export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseSc
       .map((u) => u.trim())
       .filter(Boolean);
 
-    const { data, error: err } = await addExercise({
+    const payload = {
       category: category.slug,
       nameRu: trimmed,
       nameEn: nameEn.trim() || undefined,
@@ -127,19 +151,31 @@ export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseSc
       weightType,
       baseWeight: baseWeight === '' ? undefined : parseFloat(baseWeight),
       targetWeightKg: targetWeightKg === '' ? undefined : parseFloat(targetWeightKg),
-    });
-    setSaving(false);
-    if (err) {
-      setError(err.message || 'Не удалось сохранить. Проверь таблицу exercises и RLS в Supabase.');
-      return;
+    };
+
+    if (isEdit && initialExercise) {
+      const { data, error: err } = await updateExercise(initialExercise.id, payload);
+      setSaving(false);
+      if (err) {
+        setError(err.message || 'Не удалось сохранить изменения.');
+        return;
+      }
+      if (data) onSuccess(data);
+    } else {
+      const { data, error: err } = await addExercise(payload);
+      setSaving(false);
+      if (err) {
+        setError(err.message || 'Не удалось сохранить. Проверь таблицу exercises и RLS в Supabase.');
+        return;
+      }
+      if (data) onSuccess(data);
     }
-    if (data) onSuccess(data);
   };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <ScreenHeader
-        title={`Новое упражнение · ${categoryName}`}
+        title={isEdit ? `Редактировать · ${categoryName}` : `Новое упражнение · ${categoryName}`}
         onBack={onBack}
       />
       <form onSubmit={handleSubmit} className="flex-1 p-4 max-w-lg mx-auto w-full flex flex-col gap-4">
@@ -329,7 +365,7 @@ export function AddExerciseScreen({ category, onBack, onSuccess }: AddExerciseSc
           disabled={saving}
           className="mt-auto py-3.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-medium text-white"
         >
-          {saving ? 'Сохранение…' : 'Добавить упражнение'}
+          {saving ? 'Сохранение…' : isEdit ? 'Сохранить изменения' : 'Добавить упражнение'}
         </button>
       </form>
     </div>

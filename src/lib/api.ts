@@ -529,6 +529,78 @@ export async function addExercise(exercise: AddExerciseInput): Promise<{ data: E
   return { data: mapExerciseRow(legacy.data), error: null };
 }
 
+export interface UpdateExerciseInput extends Partial<AddExerciseInput> {
+  nameRu?: string;
+  nameEn?: string;
+  category?: string;
+  weightType?: ExerciseWeightType;
+  baseWeight?: number;
+  targetWeightKg?: number;
+}
+
+/** Обновить упражнение по id. */
+export async function updateExercise(
+  id: string,
+  exercise: UpdateExerciseInput
+): Promise<{ data: Exercise | null; error: { message: string } | null }> {
+  const legacyPayload: Record<string, unknown> = {
+    category: exercise.category,
+    name_ru: exercise.nameRu,
+    name_en: exercise.nameEn,
+    weight_type: exercise.weightType ?? 'barbell',
+    base_weight: exercise.baseWeight,
+    target_weight_kg: exercise.targetWeightKg,
+  };
+  const v2Payload: Record<string, unknown> = {
+    ...legacyPayload,
+    description: exercise.description,
+    media_urls: exercise.mediaUrls,
+    body_part: exercise.bodyPart,
+    equipment_id: exercise.equipmentId ?? null,
+    input_mode: exercise.inputMode,
+    bodyweight_type: exercise.bodyweightType,
+    is_unilateral: exercise.isUnilateral,
+    simultaneous: exercise.simultaneous,
+    weight_step: exercise.weightStep,
+    default_rest_seconds: exercise.defaultRestSeconds,
+    is_compound: exercise.isCompound,
+    hidden_from_stats: exercise.hiddenFromStats,
+  };
+  Object.keys(v2Payload).forEach((k) => {
+    if ((v2Payload as any)[k] === undefined) delete (v2Payload as any)[k];
+  });
+
+  const v2 = await supabase
+    .from(EXERCISES_TABLE)
+    .update(v2Payload)
+    .eq('id', id)
+    .select(V2_EXERCISE_SELECT)
+    .single();
+
+  if (!v2.error) {
+    return { data: mapExerciseRow(v2.data), error: null };
+  }
+
+  const legacy = await supabase
+    .from(EXERCISES_TABLE)
+    .update(legacyPayload)
+    .eq('id', id)
+    .select(LEGACY_EXERCISE_SELECT)
+    .single();
+
+  if (legacy.error) {
+    return { data: null, error: { message: legacy.error.message || v2.error.message } };
+  }
+  return { data: mapExerciseRow(legacy.data), error: null };
+}
+
+/** Удалить упражнение по id. */
+export async function deleteExercise(id: string): Promise<{ error: { message: string } | null }> {
+  const { error } = await supabase.from(EXERCISES_TABLE).delete().eq('id', id);
+  if (error) return { error: { message: error.message } };
+  return { error: null };
+}
+
 /** Сохранить подходы в Supabase. Сначала пробуем расширенную v2-схему, затем legacy fallback. */
 export async function saveTrainingLogs(
   rows: SaveTrainingLogRow[]

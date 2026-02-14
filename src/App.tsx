@@ -6,9 +6,11 @@ import { AddExerciseScreen } from './components/AddExerciseScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { AnalyticsScreen } from './components/AnalyticsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
+import { getCategoryBySlug } from './data/categories';
+import { deleteExercise } from './lib/api';
 import type { Category, Exercise } from './types';
 
-type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'analytics' | 'history';
+type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -45,6 +47,27 @@ export default function App() {
     setExercisesRefreshTrigger((t) => t + 1);
   }, []);
 
+  const handleEditExercise = useCallback(() => {
+    setScreen('edit-exercise');
+  }, []);
+
+  const handleEditSuccess = useCallback((updated: Exercise) => {
+    setSelectedExercise(updated);
+    setExercisesRefreshTrigger((t) => t + 1);
+    setScreen('exercises');
+  }, []);
+
+  const handleDeleteExercise = useCallback(async (exercise: Exercise) => {
+    const { error } = await deleteExercise(exercise.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setScreen('exercises');
+    setSelectedExercise(null);
+    setExercisesRefreshTrigger((t) => t + 1);
+  }, []);
+
   const handleCategorySelect = useCallback(
     (category: Category) => {
       if (addFromCategoriesMode) {
@@ -75,6 +98,23 @@ export default function App() {
         sessionId={sessionId}
         onBack={() => setScreen('exercises')}
         onComplete={() => setScreen('exercises')}
+        onEditExercise={handleEditExercise}
+        onDeleteExercise={handleDeleteExercise}
+      />
+    );
+  }
+
+  if (screen === 'edit-exercise' && selectedExercise) {
+    const category = getCategoryBySlug(selectedExercise.category) ?? {
+      slug: selectedExercise.category,
+      name: selectedExercise.category,
+    };
+    return (
+      <AddExerciseScreen
+        category={category}
+        initialExercise={selectedExercise}
+        onBack={() => setScreen('exercise-detail')}
+        onSuccess={handleEditSuccess}
       />
     );
   }

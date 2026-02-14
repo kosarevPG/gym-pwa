@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X } from 'lucide-react';
+import { ChevronLeft, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X, Pencil, Trash2 } from 'lucide-react';
 import {
   saveTrainingLogs,
   fetchExerciseHistory,
@@ -20,6 +20,8 @@ interface ExerciseDetailScreenProps {
   sessionId: string;
   onBack: () => void;
   onComplete: () => void;
+  onEditExercise?: (exercise: ExerciseType) => void;
+  onDeleteExercise?: (exercise: ExerciseType) => void;
 }
 
 // Утилиты для расчетов (без изменений)
@@ -37,7 +39,14 @@ function calcTotalKg(inputStr: string, weightType: WeightInputType, baseWeight?:
   return formula.toEffective(input, undefined, base, mult);
 }
 
-export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }: ExerciseDetailScreenProps) {
+export function ExerciseDetailScreen({
+  exercise,
+  sessionId,
+  onBack,
+  onComplete,
+  onEditExercise,
+  onDeleteExercise,
+}: ExerciseDetailScreenProps) {
   // --- STATE ---
   const createSet = useCallback((order: number): WorkoutSet => ({
     id: crypto.randomUUID(),
@@ -378,6 +387,31 @@ export function ExerciseDetailScreen({ exercise, sessionId, onBack, onComplete }
               <History className="w-5 h-5 text-blue-400" />
               <span className="font-medium">История подходов</span>
             </button>
+
+            {onEditExercise && (
+              <button
+                onClick={() => { onEditExercise(exercise); setMenuOpen(false); }}
+                className="w-full p-4 bg-zinc-800 rounded-xl flex items-center gap-3 hover:bg-zinc-700"
+              >
+                <Pencil className="w-5 h-5 text-amber-400" />
+                <span className="font-medium">Редактировать упражнение</span>
+              </button>
+            )}
+
+            {onDeleteExercise && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Удалить упражнение «' + exercise.nameRu + '»? Логи подходов не удаляются.')) {
+                    onDeleteExercise(exercise);
+                    setMenuOpen(false);
+                  }
+                }}
+                className="w-full p-4 bg-zinc-800 rounded-xl flex items-center gap-3 hover:bg-red-900/30 text-red-400"
+              >
+                <Trash2 className="w-5 h-5" />
+                <span className="font-medium">Удалить упражнение</span>
+              </button>
+            )}
           </div>
         </>
       )}
