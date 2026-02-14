@@ -11,6 +11,8 @@ import {
   computeRampStatus,
   computeUnderloadFlag,
   computeWeeklyVolume,
+  computeWeeklyVolumeRaw,
+  markWarmupSets,
   median,
   type TrainingMetricRow,
 } from './metrics';
@@ -103,6 +105,10 @@ export interface HomeInsights {
   currentWeekCount: number;
   streakWeeks: number;
   currentWeekVolume: number;
+  /** Объём за неделю без исключения разминки (для отображения при 0 рабочего объёма). */
+  currentWeekVolumeRaw: number;
+  /** Объём за сегодня (все подходы). */
+  currentDayVolume: number;
   baselineWeekVolume: number | null;
   ramp: { active: boolean; sessionsRemaining: number; gapDays: number };
   alert: AlertItem;
@@ -123,11 +129,19 @@ export function getTodaySessionStatus(rows: TrainingMetricRow[]): TodaySessionSt
 export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exercise[]): HomeInsights {
   const attendance = computeAttendancePerWeek(rows);
   const weeklyVolume = computeWeeklyVolume(rows);
+  const weeklyVolumeRaw = computeWeeklyVolumeRaw(rows);
   const week = weekStart(new Date());
   const prevWeek = prevWeekKey(week);
   const currentWeekCount = attendance.get(week) ?? 0;
   const streakWeeks = computeAttendanceStreak(attendance, 2);
   const currentWeekVolume = weeklyVolume.get(week) ?? 0;
+  const currentWeekVolumeRaw = weeklyVolumeRaw.get(week) ?? 0;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const marked = markWarmupSets(rows);
+  const currentDayVolume = marked
+    .filter((r) => r.ts.slice(0, 10) === todayIso)
+    .reduce((sum, r) => sum + r.derivedVolume, 0);
 
   const baselineCandidates = Array.from(weeklyVolume.entries())
     .filter(([key]) => key !== week)
@@ -208,6 +222,8 @@ export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exerci
     currentWeekCount,
     streakWeeks,
     currentWeekVolume,
+    currentWeekVolumeRaw,
+    currentDayVolume,
     baselineWeekVolume,
     ramp,
     alert,

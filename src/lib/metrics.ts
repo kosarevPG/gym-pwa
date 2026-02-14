@@ -168,6 +168,17 @@ export function computeWeeklyVolume(rows: TrainingMetricRow[]): Map<string, numb
   return weekly;
 }
 
+/** Объём по неделям без исключения разминочных подходов (для отображения, когда рабочий объём = 0). */
+export function computeWeeklyVolumeRaw(rows: TrainingMetricRow[]): Map<string, number> {
+  const marked = markWarmupSets(rows);
+  const weekly = new Map<string, number>();
+  marked.forEach((r) => {
+    const week = startOfWeekIso(new Date(r.ts));
+    weekly.set(week, (weekly.get(week) ?? 0) + r.derivedVolume);
+  });
+  return weekly;
+}
+
 export function computeRampStatus(rows: TrainingMetricRow[]): RampResult {
   const sessionDates = Array.from(
     new Map(

@@ -319,7 +319,7 @@ export function HomeScreen({
               </button>
             </section>
 
-            {/* Weekly Load */}
+            {/* Нагрузка: по выбранному периоду (Сегодня / Неделя) */}
             <section
               className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900 cursor-pointer hover:bg-zinc-800/50 transition-colors"
               onClick={onOpenAnalytics}
@@ -328,12 +328,16 @@ export function HomeScreen({
               tabIndex={0}
             >
               <div className="flex items-center justify-between">
-                <p className="text-zinc-400 text-sm">Нагрузка за неделю</p>
-                {weeklyArrow}
+                <p className="text-zinc-400 text-sm">
+                  {viewMode === 'today' ? 'Объём за сегодня' : 'Нагрузка за неделю'}
+                </p>
+                {viewMode === 'week' && weeklyArrow}
               </div>
               <p className="text-sm mt-1">
-                {Math.round(insights.currentWeekVolume)} кг·повт
-                {insights.baselineWeekVolume != null && (
+                {viewMode === 'today'
+                  ? `${Math.round(insights.currentDayVolume)} кг·повт`
+                  : `${Math.round(insights.currentWeekVolume || insights.currentWeekVolumeRaw)} кг·повт`}
+                {viewMode === 'week' && insights.baselineWeekVolume != null && (
                   <span className="text-zinc-500"> / baseline {Math.round(insights.baselineWeekVolume)}</span>
                 )}
               </p>
