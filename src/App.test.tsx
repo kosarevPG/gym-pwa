@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from './App';
 
 vi.mock('./lib/api', () => ({
@@ -19,14 +19,17 @@ describe('App', () => {
     vi.clearAllMocks();
   });
 
-  it('renders home screen with Gym Dashboard', () => {
+  it('renders home screen with Сегодня chip', () => {
     render(<App />);
-    expect(screen.getByText('Gym Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Сегодня')).toBeInTheDocument();
   });
 
-  it('navigates to categories when Тренировка clicked', () => {
+  it('navigates to categories when CTA clicked', async () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Тренировка/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Начать тренировку|Продолжить/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Начать тренировку|Продолжить/i }));
     expect(screen.getByText('Упражнения')).toBeInTheDocument();
   });
 

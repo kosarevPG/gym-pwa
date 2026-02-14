@@ -91,14 +91,33 @@ export function buildTrainingMetricRows(logs: TrainingLogRaw[], exercises: Exerc
     .filter((r): r is TrainingMetricRow => r !== null);
 }
 
+export type AlertStatus = 'OK' | 'WARNING' | 'ERROR';
+
+export interface AlertItem {
+  status: AlertStatus;
+  title: string;
+  description: string;
+}
+
 export interface HomeInsights {
   currentWeekCount: number;
   streakWeeks: number;
   currentWeekVolume: number;
   baselineWeekVolume: number | null;
   ramp: { active: boolean; sessionsRemaining: number; gapDays: number };
-  alert: string;
+  alert: AlertItem;
   weeklyLoadState: 'up' | 'neutral' | 'down';
+}
+
+/** Неделя считается Пн–Вс (UTC). currentWeekCount — уникальные сессии за неделю. */
+export interface TodaySessionStatus {
+  hasLogs: boolean;
+}
+
+export function getTodaySessionStatus(rows: TrainingMetricRow[]): TodaySessionStatus {
+  const today = new Date().toISOString().slice(0, 10);
+  const hasLogs = rows.some((r) => r.ts.slice(0, 10) === today);
+  return { hasLogs };
 }
 
 export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exercise[]): HomeInsights {
@@ -168,11 +187,18 @@ export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exerci
     if (underload.active && !underloadExercise) underloadExercise = exName;
   }
 
-  let alert = 'OK';
-  if (ramp.active) alert = '💤 Ramp week — сравнение выключено';
-  else if (overloadExercise) alert = `🔴 Перегруз: ${overloadExercise}`;
-  else if (warningExercise) alert = `🟡 Риск перегруза: ${warningExercise}`;
-  else if (underloadExercise) alert = `🟡 Недогруз: ${underloadExercise}`;
+  let alert: AlertItem;
+  if (ramp.active) {
+    alert = { status: 'OK', title: 'Ramp week', description: 'Сравнение выключено' };
+  } else if (overloadExercise) {
+    alert = { status: 'ERROR', title: 'Перегруз', description: overloadExercise };
+  } else if (warningExercise) {
+    alert = { status: 'WARNING', title: 'Риск перегруза', description: warningExercise };
+  } else if (underloadExercise) {
+    alert = { status: 'WARNING', title: 'Недогруз', description: underloadExercise };
+  } else {
+    alert = { status: 'OK', title: 'Всё в порядке', description: '' };
+  }
 
   let weeklyLoadState: 'up' | 'neutral' | 'down' = 'neutral';
   if (baselineWeekVolume && currentWeekVolume >= baselineWeekVolume * 1.05) weeklyLoadState = 'up';

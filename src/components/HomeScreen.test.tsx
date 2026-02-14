@@ -18,14 +18,14 @@ describe('HomeScreen', () => {
     await waitFor(() => {
       expect(screen.queryByText('Загрузка...')).not.toBeInTheDocument();
     });
-    expect(screen.getByText(/Attendance/i)).toBeInTheDocument();
-    expect(screen.getByText(/Gym Dashboard/i)).toBeInTheDocument();
+    expect(screen.getByText(/Посещения/i)).toBeInTheDocument();
+    expect(screen.getByText('Сегодня')).toBeInTheDocument();
   });
 
-  it('renders Тренировка and Аналитика buttons', async () => {
+  it('renders CTA and Аналитика', async () => {
     render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} onOpenHistory={() => {}} />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Тренировка/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Начать тренировку|Продолжить/i })).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /Аналитика/i })).toBeInTheDocument();
   });

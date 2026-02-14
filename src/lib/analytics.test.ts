@@ -73,6 +73,11 @@ describe('computeHomeInsights', () => {
     expect(insights).toHaveProperty('ramp');
     expect(insights).toHaveProperty('alert');
     expect(insights).toHaveProperty('weeklyLoadState');
+    expect(insights.alert).toMatchObject({
+      status: expect.stringMatching(/^(OK|WARNING|ERROR)$/),
+      title: expect.any(String),
+      description: expect.any(String),
+    });
   });
 });
 
