@@ -5,9 +5,10 @@ import { ExerciseDetailScreen } from './components/ExerciseDetailScreen';
 import { AddExerciseScreen } from './components/AddExerciseScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { AnalyticsScreen } from './components/AnalyticsScreen';
+import { HistoryScreen } from './components/HistoryScreen';
 import type { Category, Exercise } from './types';
 
-type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'analytics';
+type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'analytics' | 'history';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -94,11 +95,16 @@ export default function App() {
     return <AnalyticsScreen onBack={() => setScreen('home')} />;
   }
 
+  if (screen === 'history') {
+    return <HistoryScreen onBack={() => setScreen('home')} />;
+  }
+
   if (screen === 'home') {
     return (
       <HomeScreen
         onOpenExercises={openCategories}
         onOpenAnalytics={() => setScreen('analytics')}
+        onOpenHistory={() => setScreen('history')}
       />
     );
   }

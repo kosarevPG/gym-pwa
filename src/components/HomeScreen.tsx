@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, CalendarDays, Dumbbell, Flame, TrendingDown, TrendingUp } from 'lucide-react';
+import { Activity, BarChart3, CalendarDays, Dumbbell, Flame, History, TrendingDown, TrendingUp } from 'lucide-react';
 import { fetchAllExercises, fetchTrainingLogsWindow } from '../lib/api';
 import { buildTrainingMetricRows, computeHomeInsights } from '../lib/analytics';
 
 interface HomeScreenProps {
   onOpenExercises: () => void;
   onOpenAnalytics: () => void;
+  onOpenHistory: () => void;
 }
 
-export function HomeScreen({ onOpenExercises, onOpenAnalytics }: HomeScreenProps) {
+export function HomeScreen({ onOpenExercises, onOpenAnalytics, onOpenHistory }: HomeScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ReturnType<typeof buildTrainingMetricRows>>([]);
@@ -57,7 +58,14 @@ export function HomeScreen({ onOpenExercises, onOpenAnalytics }: HomeScreenProps
             <h1 className="text-xl font-bold">Gym Dashboard</h1>
             <p className="text-xs text-zinc-400">Сегодня/неделя</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm flex items-center gap-2"
+            >
+              <History className="w-4 h-4" /> История
+            </button>
             <button
               type="button"
               onClick={onOpenAnalytics}

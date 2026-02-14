@@ -13,7 +13,7 @@ describe('HomeScreen', () => {
   });
 
   it('shows loading then content after data load', async () => {
-    render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} />);
+    render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} onOpenHistory={() => {}} />);
     expect(screen.getByText('Загрузка...')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText('Загрузка...')).not.toBeInTheDocument();
@@ -23,7 +23,7 @@ describe('HomeScreen', () => {
   });
 
   it('renders Тренировка and Аналитика buttons', async () => {
-    render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} />);
+    render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} onOpenHistory={() => {}} />);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Тренировка/i })).toBeInTheDocument();
     });
