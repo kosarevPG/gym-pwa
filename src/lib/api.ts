@@ -731,19 +731,28 @@ export interface WorkoutSummaryData {
 }
 
 export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSummaryData | null> {
-  const [sessionRes, logsRes] = await Promise.all([
-    supabase.from(WORKOUT_SESSIONS_TABLE).select('started_at, ended_at').eq('id', sessionId).single(),
-    supabase
-      .from(TRAINING_LOGS_TABLE)
-      .select('set_volume, rpe, completed_at, created_at')
-      .eq('set_group_id', sessionId),
-  ]);
+  const sessionRes = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .select('started_at, ended_at')
+    .eq('id', sessionId)
+    .single();
   if (sessionRes.error || !sessionRes.data) return null;
-  const started = new Date(sessionRes.data.started_at).getTime();
+  const started = new Date(sessionRes.data.started_at).toISOString();
   const ended = sessionRes.data.ended_at
-    ? new Date(sessionRes.data.ended_at).getTime()
-    : Date.now();
-  const durationSec = Math.max(0, Math.floor((ended - started) / 1000));
+    ? new Date(sessionRes.data.ended_at).toISOString()
+    : new Date().toISOString();
+  const durationSec = Math.max(
+    0,
+    Math.floor((new Date(ended).getTime() - new Date(started).getTime()) / 1000)
+  );
+
+  // Логи тренировки — по временному окну (set_group_id не привязан к workout_sessions, чтобы суперсеты работали)
+  const logsRes = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select('set_volume, rpe, created_at')
+    .gte('created_at', started)
+    .lte('created_at', ended);
+  if (logsRes.error) return null;
 
   const rows = (logsRes.data ?? []) as Array<{
     set_volume?: number | null;

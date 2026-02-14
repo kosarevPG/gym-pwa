@@ -234,6 +234,8 @@ export function ExerciseDetailScreen({
       return;
     }
 
+    // Один set_group_id на одно нажатие «Завершить» — иначе в истории ломается определение суперсетов
+    const saveGroupId = crypto.randomUUID();
     const logs: Parameters<typeof saveTrainingLogs>[0] = [];
     for (let round = 1; round <= maxRounds; round++) {
       const orderIndex = round;
@@ -247,7 +249,7 @@ export function ExerciseDetailScreen({
           exercise_id: block.exercise.id,
           weight: totalKg,
           reps: rps,
-          set_group_id: sessionId,
+          set_group_id: saveGroupId,
           order_index: orderIndex,
           input_wt: parseFloat(s.inputWeight) || 0,
           side: s.side ?? 'both',
