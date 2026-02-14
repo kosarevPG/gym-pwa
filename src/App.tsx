@@ -111,6 +111,7 @@ export default function App() {
         setAddFromCategoriesMode(false);
       }}
       onSelectCategory={handleCategorySelect}
+      onSelectExercise={openExerciseDetail}
       onAddExercise={() => setAddFromCategoriesMode(true)}
     />
   );
