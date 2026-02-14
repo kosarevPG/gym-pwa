@@ -177,15 +177,25 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                 {isExpanded && (
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-2 space-y-4">
                     {(() => {
-                      const bySetNo = new Map<number, TrainingLogRaw[]>();
-                      session.rows.forEach((r) => {
-                        const no = r.set_no;
-                        if (!bySetNo.has(no)) bySetNo.set(no, []);
-                        bySetNo.get(no)!.push(r);
-                      });
+                      // Суперсет только когда на экране упражнения было два блока (Суперсет) и один «Завершить» — один session_id, один set_no у нескольких упражнений
                       const supersetExerciseIds = new Set<string>();
-                      bySetNo.forEach((rows) => {
-                        if (rows.length > 1) rows.forEach((r) => supersetExerciseIds.add(r.exercise_id));
+                      const bySessionId = new Map<string, TrainingLogRaw[]>();
+                      session.rows.forEach((r) => {
+                        const sid = r.session_id;
+                        if (!bySessionId.has(sid)) bySessionId.set(sid, []);
+                        bySessionId.get(sid)!.push(r);
+                      });
+                      bySessionId.forEach((rows) => {
+                        const bySetNo = new Map<number, TrainingLogRaw[]>();
+                        rows.forEach((r) => {
+                          const no = r.set_no;
+                          if (!bySetNo.has(no)) bySetNo.set(no, []);
+                          bySetNo.get(no)!.push(r);
+                        });
+                        bySetNo.forEach((setRows) => {
+                          if (setRows.length > 1)
+                            setRows.forEach((r) => supersetExerciseIds.add(r.exercise_id));
+                        });
                       });
                       const byExercise = new Map<string, TrainingLogRaw[]>();
                       session.rows.forEach((r) => {
