@@ -1,8 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, ChevronDown, ChevronRight, Calendar, Link2 } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, ChevronRight, Calendar, Link2, Download, Upload } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
-import { fetchTrainingLogsWindow, fetchAllExercises } from '../lib/api';
-import type { TrainingLogRaw } from '../lib/api';
+import {
+  fetchTrainingLogsWindow,
+  fetchAllExercises,
+  exportWorkoutData,
+  importWorkoutData,
+  EXPORT_FORMAT_VERSION,
+} from '../lib/api';
+import type { TrainingLogRaw, ExportWorkoutPayload } from '../lib/api';
 import type { Exercise } from '../types';
 import { getCategoryBySlug } from '../data/categories';
 
@@ -88,10 +94,19 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
   const [loading, setLoading] = useState(true);
   const [allExpanded, setAllExpanded] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadData = useMemo(
+    () => () => Promise.all([fetchTrainingLogsWindow(84), fetchAllExercises()]),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchTrainingLogsWindow(84), fetchAllExercises()]).then(([logList, exList]) => {
+    loadData().then(([logList, exList]) => {
       if (!cancelled) {
         setLogs(logList);
         setExercises(exList);
@@ -99,10 +114,62 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
       }
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [loadData]);
 
   const sessions = useMemo(() => buildSessions(logs, exercises), [logs, exercises]);
   const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    setImportMessage(null);
+    try {
+      const payload = await exportWorkoutData(730);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gym-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setImportMessage(e instanceof Error ? e.message : 'Ошибка экспорта');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setImportMessage(null);
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text) as ExportWorkoutPayload;
+      if (payload.version !== EXPORT_FORMAT_VERSION) {
+        setImportMessage(`Неверная версия файла: ${payload.version}. Ожидается ${EXPORT_FORMAT_VERSION}.`);
+        return;
+      }
+      const result = await importWorkoutData(payload);
+      if (result.success) {
+        setImportMessage(
+          `Импорт завершён: сессий ${result.sessionsCreated ?? 0}, записей логов ${result.logsCreated ?? 0}.`
+        );
+        const [logList, exList] = await loadData();
+        setLogs(logList);
+        setExercises(exList);
+      } else {
+        setImportMessage(result.error ?? 'Ошибка импорта');
+      }
+    } catch (err) {
+      setImportMessage(err instanceof Error ? err.message : 'Ошибка чтения файла');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const toggleSession = (sessionId: string) => {
     setExpandedIds((prev) => {
@@ -127,14 +194,46 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <ScreenHeader title="История" onBack={onBack} />
 
-      <div className="px-4 pb-3 pt-1 border-b border-zinc-800">
-        <button
-          type="button"
-          onClick={toggleExpandAll}
-          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm"
-        >
-          {allExpanded ? 'Свернуть все тренировки' : 'Развернуть все тренировки'}
-        </button>
+      <div className="px-4 pb-3 pt-1 border-b border-zinc-800 space-y-2">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={toggleExpandAll}
+            className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm"
+          >
+            {allExpanded ? 'Свернуть все' : 'Развернуть все'}
+          </button>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium disabled:opacity-50"
+            title="Скачать данные (сессии, логи, упражнения)"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? '…' : 'Экспорт'}
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium disabled:opacity-50"
+            title="Загрузить ранее экспортированный файл"
+          >
+            <Upload className="w-4 h-4" />
+            {importing ? '…' : 'Импорт'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
+        </div>
+        {importMessage && (
+          <p className="text-sm text-zinc-400">{importMessage}</p>
+        )}
       </div>
 
       <main className="flex-1 p-4 max-w-lg mx-auto w-full space-y-3">

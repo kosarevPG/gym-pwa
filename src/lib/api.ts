@@ -789,3 +789,121 @@ export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSumma
     avgRpe: avgRpe != null ? Math.round(avgRpe * 10) / 10 : null,
   };
 }
+
+// --- Экспорт / Импорт данных ---
+
+export const EXPORT_FORMAT_VERSION = 1;
+
+export interface ExportWorkoutPayload {
+  version: number;
+  exportedAt: string;
+  workoutSessions: WorkoutSessionRow[];
+  trainingLogs: TrainingLogRaw[];
+  exercises: Exercise[];
+}
+
+/** Все завершённые сессии за период (для экспорта). */
+export async function getAllWorkoutSessions(days = 730): Promise<WorkoutSessionRow[]> {
+  const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .select('id, started_at, ended_at, name, status')
+    .gte('started_at', sinceIso)
+    .order('started_at', { ascending: false })
+    .limit(5000);
+  if (error) {
+    console.error('getAllWorkoutSessions error:', error);
+    return [];
+  }
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    started_at: String(r.started_at),
+    ended_at: r.ended_at != null ? String(r.ended_at) : null,
+    name: r.name != null ? String(r.name) : null,
+    status: String(r.status),
+  }));
+}
+
+/** Собрать данные для экспорта: сессии, логи, упражнения (используемые в логах). */
+export async function exportWorkoutData(days = 730): Promise<ExportWorkoutPayload> {
+  const [sessions, logs, allExercises] = await Promise.all([
+    getAllWorkoutSessions(days),
+    fetchTrainingLogsWindow(days),
+    fetchAllExercises(),
+  ]);
+  const exerciseIds = new Set(logs.map((r) => r.exercise_id));
+  const exercises = allExercises.filter((e) => exerciseIds.has(e.id));
+  return {
+    version: EXPORT_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    workoutSessions: sessions,
+    trainingLogs: logs,
+    exercises,
+  };
+}
+
+export interface ImportWorkoutResult {
+  success: boolean;
+  error?: string;
+  sessionsCreated?: number;
+  logsCreated?: number;
+}
+
+/** Импорт: создаём сессии и логи. exercise_id в логах должны существовать в БД. */
+export async function importWorkoutData(
+  payload: ExportWorkoutPayload
+): Promise<ImportWorkoutResult> {
+  if (payload.version !== EXPORT_FORMAT_VERSION || !Array.isArray(payload.workoutSessions) || !Array.isArray(payload.trainingLogs)) {
+    return { success: false, error: 'Неверный формат файла (версия или поля).' };
+  }
+  const sessionIdMap = new Map<string, string>();
+  const completedSessions = payload.workoutSessions.filter((s) => s.status === 'completed' && s.ended_at);
+  for (const s of completedSessions) {
+    const { data, error } = await supabase
+      .from(WORKOUT_SESSIONS_TABLE)
+      .insert({
+        started_at: s.started_at,
+        ended_at: s.ended_at,
+        name: s.name,
+        status: 'completed',
+      })
+      .select('id')
+      .single();
+    if (error) {
+      return { success: false, error: `Ошибка создания сессии: ${error.message}` };
+    }
+    sessionIdMap.set(s.id, String(data.id));
+  }
+  let logsCreated = 0;
+  const logsToImport = payload.trainingLogs.filter((r) => sessionIdMap.has(r.session_id));
+  const batchSize = 100;
+  for (let i = 0; i < logsToImport.length; i += batchSize) {
+    const chunk = logsToImport.slice(i, i + batchSize);
+    const rows: SaveTrainingLogRow[] = chunk.map((r) => ({
+      session_id: sessionIdMap.get(r.session_id)!,
+      set_group_id: r.set_group_id,
+      exercise_id: r.exercise_id,
+      weight: r.input_wt,
+      reps: r.reps,
+      order_index: r.set_no,
+      input_wt: r.input_wt,
+      side: r.side,
+      body_wt_snapshot: r.body_wt_snapshot ?? undefined,
+      side_mult: r.side_mult ?? undefined,
+      set_volume: r.set_volume ?? undefined,
+      rpe: r.rpe || undefined,
+      rest_seconds: r.rest_s || undefined,
+      completed_at: r.ts,
+    }));
+    const { error } = await saveTrainingLogs(rows);
+    if (error) {
+      return { success: false, error: `Ошибка сохранения логов: ${error.message}` };
+    }
+    logsCreated += rows.length;
+  }
+  return {
+    success: true,
+    sessionsCreated: sessionIdMap.size,
+    logsCreated,
+  };
+}
