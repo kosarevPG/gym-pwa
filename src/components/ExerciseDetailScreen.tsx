@@ -25,19 +25,24 @@ interface ExerciseDetailScreenProps {
   onDeleteExercise?: (exercise: ExerciseType) => void;
 }
 
-// Утилиты для расчетов (без изменений)
+// Утилиты для расчетов
 function getWeightType(ex: ExerciseType): WeightInputType {
   const t = ex.weightType ?? 'barbell';
   return getWeightInputType(undefined, t);
 }
 
-function calcTotalKg(inputStr: string, weightType: WeightInputType, baseWeight?: number): number | null {
+/**
+ * Рассчитывает итоговую эффективную нагрузку.
+ * Принимает userBodyWeight для корректного расчета bodyweight/assisted упражнений.
+ */
+function calcTotalKg(inputStr: string, weightType: WeightInputType, baseWeight?: number, userBodyWeight?: number): number | null {
   const input = parseFloat(inputStr);
   if (inputStr === '' || isNaN(input)) return null;
   const formula = WEIGHT_FORMULAS[weightType];
   const base = baseWeight ?? (weightType === 'barbell' ? 20 : 0);
+  // Для штанги и plate_loaded множитель 2 (два конца грифа/рычага), для остальных 1
   const mult = weightType === 'barbell' || weightType === 'plate_loaded' ? 2 : 1;
-  return formula.toEffective(input, undefined, base, mult);
+  return formula.toEffective(input, userBodyWeight, base, mult);
 }
 
 export interface ExerciseBlock {
@@ -243,7 +248,8 @@ export function ExerciseDetailScreen({
         const s = block.sets[round - 1];
         if (!s || (!s.completed && !s.inputWeight && !s.reps)) continue;
         const wtType = getWeightType(block.exercise);
-        const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight) ?? 0;
+        // Передаем bodyWeight для корректного расчета Effective Load в логах
+        const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight, bodyWeight ?? undefined) ?? 0;
         const rps = parseInt(s.reps) || 0;
         logs.push({
           session_id: sessionId,
@@ -254,6 +260,7 @@ export function ExerciseDetailScreen({
           order_index: orderIndex,
           input_wt: parseFloat(s.inputWeight) || 0,
           side: s.side ?? 'both',
+          body_wt_snapshot: bodyWeight ?? undefined,
           set_volume: totalKg * rps,
           rpe: s.rpe ? parseFloat(s.rpe) : undefined,
           rest_seconds: (parseFloat(s.restMin) || 0) * 60,
@@ -314,6 +321,7 @@ export function ExerciseDetailScreen({
         {blocks.map((block) => {
           const isFirstBlock = block.exercise.id === exercise.id;
           const blockLastSnapshot = isFirstBlock ? lastSnapshot : null;
+          const weightType = getWeightType(block.exercise);
 
           return (
             <div key={block.id} className="space-y-3">
@@ -325,6 +333,14 @@ export function ExerciseDetailScreen({
                 const setSwipeOffset =
                   swipeState?.setId === set.id ? swipeState.offset : revealedDeleteSetId === set.id ? -80 : 0;
                 const canSwipeDelete = block.sets.length > 1;
+
+                // Расчет эффективной нагрузки для отображения
+                const effectiveKg = calcTotalKg(
+                  set.inputWeight,
+                  weightType,
+                  block.exercise.baseWeight,
+                  bodyWeight ?? undefined
+                );
 
                 return (
                   <div
@@ -368,7 +384,7 @@ export function ExerciseDetailScreen({
                             {isDone ? <Check className="w-5 h-5" /> : <span className="text-xs font-medium">{set.order}</span>}
                           </button>
                           <div className="flex-1 grid grid-cols-3 divide-x divide-zinc-800 min-w-0">
-                            <div className="relative p-2 sm:p-3">
+                            <div className="relative p-2 sm:p-3 flex flex-col justify-between">
                               <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center">Вес</label>
                               <input
                                 ref={(el) => (setInputRefs.current[`${set.id}-weight`] = el)}
@@ -380,6 +396,11 @@ export function ExerciseDetailScreen({
                                 placeholder={blockLastSnapshot ? String(blockLastSnapshot.weight) : '0'}
                                 className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                               />
+                              {effectiveKg !== null && !isNaN(effectiveKg) && (
+                                <div className="text-[10px] text-zinc-500 text-center mt-1 font-mono leading-none">
+                                  ≈{Math.round(effectiveKg)} кг
+                                </div>
+                              )}
                             </div>
                             <div className="relative p-2 sm:p-3">
                               <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center">Повт</label>
@@ -395,7 +416,7 @@ export function ExerciseDetailScreen({
                             </div>
                             <div className="relative p-2 sm:p-3">
                               <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center">Отдых</label>
-                              <div className="flex items-center justify-center gap-1">
+                              <div className="flex items-center justify-center gap-1 h-full pb-2">
                                 <input
                                   type="number"
                                   value={set.restMin}
