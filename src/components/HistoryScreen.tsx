@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Calendar, Link2 } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
 import { fetchTrainingLogsWindow, fetchAllExercises } from '../lib/api';
 import type { TrainingLogRaw } from '../lib/api';
@@ -27,21 +27,22 @@ function formatDate(ts: string): string {
   return `${y}.${m}.${day}`;
 }
 
+/** Одна дата = одна тренировка. Все подходы за день объединяются в один блок. */
 function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGroup[] {
-  const bySession = new Map<string, TrainingLogRaw[]>();
+  const byDate = new Map<string, TrainingLogRaw[]>();
   logs.forEach((r) => {
-    if (!bySession.has(r.session_id)) bySession.set(r.session_id, []);
-    bySession.get(r.session_id)!.push(r);
+    const dateStr = formatDate(r.ts);
+    if (!byDate.has(dateStr)) byDate.set(dateStr, []);
+    byDate.get(dateStr)!.push(r);
   });
 
   const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
 
   const sessions: SessionGroup[] = [];
-  bySession.forEach((rows, sessionId) => {
+  byDate.forEach((rows, dateStr) => {
     const sorted = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     const first = sorted[0];
     const last = sorted[sorted.length - 1];
-    const dateStr = formatDate(first.ts);
     const durationMs = new Date(last.ts).getTime() - new Date(first.ts).getTime();
     const durationMin = Math.round(durationMs / 60000);
 
@@ -58,7 +59,7 @@ function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGr
       .filter(Boolean) as string[];
 
     sessions.push({
-      sessionId,
+      sessionId: dateStr,
       date: dateStr,
       durationMin,
       categoryNames,
@@ -182,15 +183,32 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                         if (!bySetNo.has(no)) bySetNo.set(no, []);
                         bySetNo.get(no)!.push(r);
                       });
-                      const supersetSetNos = new Set(
-                        Array.from(bySetNo.entries()).filter(([, rows]) => rows.length > 1).map(([no]) => no)
-                      );
+                      const supersetExerciseIds = new Set<string>();
+                      bySetNo.forEach((rows) => {
+                        if (rows.length > 1) rows.forEach((r) => supersetExerciseIds.add(r.exercise_id));
+                      });
                       const byExercise = new Map<string, TrainingLogRaw[]>();
                       session.rows.forEach((r) => {
                         if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
                         byExercise.get(r.exercise_id)!.push(r);
                       });
-                      return Array.from(byExercise.entries()).map(([exId, sets]) => {
+                      const exerciseOrder = [...byExercise.keys()].sort(
+                        (a, b) =>
+                          new Date(byExercise.get(a)![0].ts).getTime() - new Date(byExercise.get(b)![0].ts).getTime()
+                      );
+                      const runs: { superset: boolean; exIds: string[] }[] = [];
+                      let current: { superset: boolean; exIds: string[] } | null = null;
+                      for (const exId of exerciseOrder) {
+                        const isSuperset = supersetExerciseIds.has(exId);
+                        if (current && current.superset === isSuperset) {
+                          current.exIds.push(exId);
+                        } else {
+                          current = { superset: isSuperset, exIds: [exId] };
+                          runs.push(current);
+                        }
+                      }
+                      const renderExercise = (exId: string) => {
+                        const sets = byExercise.get(exId)!;
                         const ex = exerciseMap.get(exId);
                         const nameRu = ex?.nameRu ?? exId;
                         const nameEn = ex?.nameEn;
@@ -205,7 +223,6 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                               {sortedSets.map((row) => {
                                 const kg = row.effective_load ?? row.input_wt;
                                 const rest = restMin(row.rest_s);
-                                const isSuperset = supersetSetNos.has(row.set_no);
                                 return (
                                   <div
                                     key={row.id}
@@ -213,11 +230,6 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                                   >
                                     <span className="min-w-0">
                                       {kg} кг × {row.reps} повторений
-                                      {isSuperset && (
-                                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                          суперсет
-                                        </span>
-                                      )}
                                     </span>
                                     <span className="text-zinc-500 flex-shrink-0">отдых {rest}</span>
                                   </div>
@@ -226,7 +238,25 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                             </div>
                           </div>
                         );
-                      });
+                      };
+                      return runs.map((run, runIdx) =>
+                        run.superset ? (
+                          <div
+                            key={`superset-${runIdx}`}
+                            className="rounded-xl border-l-4 border-blue-500 bg-blue-500/5 pl-3 pr-2 py-2 space-y-3"
+                          >
+                            <div className="flex items-center gap-2 text-blue-400 text-xs font-semibold uppercase tracking-wider">
+                              <Link2 className="w-4 h-4 flex-shrink-0" />
+                              СУПЕРСЕТ
+                            </div>
+                            {run.exIds.map(renderExercise)}
+                          </div>
+                        ) : (
+                          <div key={`solo-${runIdx}`} className="space-y-4">
+                            {run.exIds.map(renderExercise)}
+                          </div>
+                        )
+                      );
                     })()}
                   </div>
                 )}

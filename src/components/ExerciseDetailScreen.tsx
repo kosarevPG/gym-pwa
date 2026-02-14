@@ -450,7 +450,7 @@ export function ExerciseDetailScreen({
                     title="Добавить упражнение в суперсет"
                   >
                     <Plus className="w-4 h-4" />
-                    + Суперсет
+                    Суперсет
                   </button>
                 )}
               </div>
