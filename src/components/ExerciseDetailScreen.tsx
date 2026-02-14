@@ -442,23 +442,21 @@ export function ExerciseDetailScreen({
                   <Plus className="w-5 h-5" />
                   Добавить подход
                 </button>
+                {isFirstBlock && (
+                  <button
+                    type="button"
+                    onClick={() => setAddSetPickerOpen(true)}
+                    className="flex-shrink-0 px-4 py-4 rounded-2xl border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 font-medium text-sm"
+                    title="Добавить упражнение в суперсет"
+                  >
+                    <Plus className="w-4 h-4" />
+                    + Суперсет
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
-
-        {/* Одна кнопка «+ Сет» — добавить блок с другим упражнением */}
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => setAddSetPickerOpen(true)}
-            className="px-6 py-3 rounded-2xl border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 font-medium text-sm"
-            title="Добавить ещё одно упражнение в сет"
-          >
-            <Plus className="w-4 h-4" />
-            + Сет
-          </button>
-        </div>
 
         {/* Spacer for bottom button */}
         <div className="h-24" />
@@ -551,7 +549,7 @@ export function ExerciseDetailScreen({
             <button type="button" onClick={() => { setAddSetPickerOpen(false); setAddSetSearchQuery(''); setAddSetSearchResults([]); }}>
               <ChevronLeft className="w-6 h-6" />
             </button>
-            <h2 className="font-bold">Добавить сет</h2>
+            <h2 className="font-bold">Добавить в суперсет</h2>
           </header>
           <div className="p-4 border-b border-zinc-800">
             <div className="relative flex items-center gap-2">

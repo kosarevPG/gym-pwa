@@ -176,6 +176,15 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                 {isExpanded && (
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-2 space-y-4">
                     {(() => {
+                      const bySetNo = new Map<number, TrainingLogRaw[]>();
+                      session.rows.forEach((r) => {
+                        const no = r.set_no;
+                        if (!bySetNo.has(no)) bySetNo.set(no, []);
+                        bySetNo.get(no)!.push(r);
+                      });
+                      const supersetSetNos = new Set(
+                        Array.from(bySetNo.entries()).filter(([, rows]) => rows.length > 1).map(([no]) => no)
+                      );
                       const byExercise = new Map<string, TrainingLogRaw[]>();
                       session.rows.forEach((r) => {
                         if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
@@ -193,18 +202,24 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                               {nameEn ? ` / ${nameEn}` : ''}
                             </p>
                             <div className="space-y-1 pl-2">
-                              {sortedSets.map((row, i) => {
+                              {sortedSets.map((row) => {
                                 const kg = row.effective_load ?? row.input_wt;
                                 const rest = restMin(row.rest_s);
+                                const isSuperset = supersetSetNos.has(row.set_no);
                                 return (
                                   <div
                                     key={row.id}
-                                    className="flex justify-between items-baseline text-sm text-zinc-300"
+                                    className="flex justify-between items-baseline text-sm text-zinc-300 gap-2"
                                   >
-                                    <span>
+                                    <span className="min-w-0">
                                       {kg} кг × {row.reps} повторений
+                                      {isSuperset && (
+                                        <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                          суперсет
+                                        </span>
+                                      )}
                                     </span>
-                                    <span className="text-zinc-500">отдых {rest}</span>
+                                    <span className="text-zinc-500 flex-shrink-0">отдых {rest}</span>
                                   </div>
                                 );
                               })}

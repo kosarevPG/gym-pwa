@@ -19,7 +19,20 @@ export default function App() {
   const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
   const [addFromCategoriesMode, setAddFromCategoriesMode] = useState(false);
 
-  const sessionId = useMemo(() => `session_${Date.now()}`, []);
+  const sessionId = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const stored = localStorage.getItem('gym_session_date');
+      const storedId = localStorage.getItem('gym_session_id');
+      if (stored === today && storedId) return storedId;
+    } catch (_) {}
+    const id = `session_${Date.now()}`;
+    try {
+      localStorage.setItem('gym_session_date', today);
+      localStorage.setItem('gym_session_id', id);
+    } catch (_) {}
+    return id;
+  }, []);
 
   const openCategories = useCallback(() => {
     setScreen('categories');
