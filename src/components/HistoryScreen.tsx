@@ -74,11 +74,12 @@ function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGr
 
 function restMin(restS: number): string {
   if (restS <= 0) return '0м';
-  const m = Math.round(restS / 60);
-  if (m < 60) return `${m}м`;
+  const m = restS / 60;
+  const fmt = (x: number) => (x % 1 === 0 ? String(Math.round(x)) : String(Number(x.toFixed(1))));
+  if (m < 60) return `${fmt(m)}м`;
   const h = Math.floor(m / 60);
   const rem = m % 60;
-  return rem ? `${h}ч ${rem}м` : `${h}ч`;
+  return rem > 0 ? `${h}ч ${fmt(rem)}м` : `${h}ч`;
 }
 
 export function HistoryScreen({ onBack }: HistoryScreenProps) {

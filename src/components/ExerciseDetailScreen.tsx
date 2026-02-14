@@ -210,8 +210,13 @@ export function ExerciseDetailScreen({
 
     if (isCompleting) {
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
-      const restSec = (parseFloat(set.restMin) || 0) * 60;
-      if (restSec > 0) setRestCountdownSec(restSec);
+      const isLastSet = setIndex === block.sets.length - 1;
+      if (isLastSet) {
+        setRestCountdownSec(0);
+      } else {
+        const restSec = (parseFloat(set.restMin) || 0) * 60;
+        if (restSec > 0) setRestCountdownSec(restSec);
+      }
       const nextSet = block.sets[setIndex + 1];
       if (nextSet) setInputRefs.current[`${nextSet.id}-weight`]?.focus();
     } else {
