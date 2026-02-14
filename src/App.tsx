@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { CategoriesScreen } from './components/CategoriesScreen';
 import { ExerciseListScreen } from './components/ExerciseListScreen';
 import { ExerciseDetailScreen } from './components/ExerciseDetailScreen';
@@ -6,11 +6,12 @@ import { AddExerciseScreen } from './components/AddExerciseScreen';
 import { HomeScreen } from './components/HomeScreen';
 import { AnalyticsScreen } from './components/AnalyticsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
+import { WorkoutSummaryScreen } from './components/WorkoutSummaryScreen';
 import { getCategoryBySlug } from './data/categories';
-import { deleteExercise } from './lib/api';
+import { deleteExercise, getActiveWorkoutSession } from './lib/api';
 import type { Category, Exercise } from './types';
 
-type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history';
+type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history' | 'summary';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -18,8 +19,15 @@ export default function App() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
   const [addFromCategoriesMode, setAddFromCategoriesMode] = useState(false);
+  const [summarySessionId, setSummarySessionId] = useState<string | null>(null);
 
-  const [sessionId, setSessionId] = useState(() => `session_${Date.now()}`);
+  const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
+
+  useEffect(() => {
+    getActiveWorkoutSession().then((active) => {
+      if (active) setSessionId(active.id);
+    }).catch(() => {});
+  }, []);
 
   const openCategories = useCallback(() => {
     setScreen('categories');
@@ -35,7 +43,6 @@ export default function App() {
 
   const openExerciseDetail = useCallback((exercise: Exercise) => {
     setSelectedExercise(exercise);
-    setSessionId(`session_${Date.now()}`);
     setScreen('exercise-detail');
   }, []);
 
@@ -140,12 +147,32 @@ export default function App() {
     return <HistoryScreen onBack={() => setScreen('home')} />;
   }
 
+  if (screen === 'summary' && summarySessionId) {
+    return (
+      <WorkoutSummaryScreen
+        sessionId={summarySessionId}
+        onGoHome={() => {
+          setSummarySessionId(null);
+          setScreen('home');
+        }}
+      />
+    );
+  }
+
   if (screen === 'home') {
     return (
       <HomeScreen
         onOpenExercises={openCategories}
         onOpenAnalytics={() => setScreen('analytics')}
         onOpenHistory={() => setScreen('history')}
+        onSessionStarted={(id) => {
+          setSessionId(id);
+          openCategories();
+        }}
+        onWorkoutFinished={(id) => {
+          setSummarySessionId(id);
+          setScreen('summary');
+        }}
       />
     );
   }

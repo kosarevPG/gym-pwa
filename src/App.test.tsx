@@ -12,6 +12,10 @@ vi.mock('./lib/api', () => ({
   fetchLatestBodyWeight: vi.fn().mockResolvedValue(null),
   fetchExerciseHistory: vi.fn().mockResolvedValue([]),
   saveTrainingLogs: vi.fn().mockResolvedValue({ error: null }),
+  getActiveWorkoutSession: vi.fn().mockResolvedValue(null),
+  createWorkoutSession: vi.fn().mockResolvedValue({ id: 'test-session-id' }),
+  completeWorkoutSession: vi.fn().mockResolvedValue({ error: null }),
+  getWorkoutSummary: vi.fn().mockResolvedValue({ durationSec: 120, tonnageKg: 1000, setsCount: 5, avgRpe: 8 }),
 }));
 
 describe('App', () => {
@@ -30,7 +34,9 @@ describe('App', () => {
       expect(screen.getByRole('button', { name: /Начать тренировку|Продолжить/i })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: /Начать тренировку|Продолжить/i }));
-    expect(screen.getByText('Упражнения')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Упражнения')).toBeInTheDocument();
+    });
   });
 
   it('navigates to analytics when Аналитика clicked', () => {

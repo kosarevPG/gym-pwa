@@ -5,6 +5,9 @@ import { HomeScreen } from './HomeScreen';
 vi.mock('../lib/api', () => ({
   fetchAllExercises: vi.fn().mockResolvedValue([]),
   fetchTrainingLogsWindow: vi.fn().mockResolvedValue([]),
+  getActiveWorkoutSession: vi.fn().mockResolvedValue(null),
+  createWorkoutSession: vi.fn().mockResolvedValue({ id: 'test-session' }),
+  completeWorkoutSession: vi.fn().mockResolvedValue({ error: null }),
 }));
 
 describe('HomeScreen', () => {
@@ -13,7 +16,15 @@ describe('HomeScreen', () => {
   });
 
   it('shows loading then content after data load', async () => {
-    render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} onOpenHistory={() => {}} />);
+    render(
+      <HomeScreen
+        onOpenExercises={() => {}}
+        onOpenAnalytics={() => {}}
+        onOpenHistory={() => {}}
+        onSessionStarted={() => {}}
+        onWorkoutFinished={() => {}}
+      />
+    );
     expect(screen.getByText('Загрузка...')).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText('Загрузка...')).not.toBeInTheDocument();
@@ -23,7 +34,15 @@ describe('HomeScreen', () => {
   });
 
   it('renders CTA and Аналитика', async () => {
-    render(<HomeScreen onOpenExercises={() => {}} onOpenAnalytics={() => {}} onOpenHistory={() => {}} />);
+    render(
+      <HomeScreen
+        onOpenExercises={() => {}}
+        onOpenAnalytics={() => {}}
+        onOpenHistory={() => {}}
+        onSessionStarted={() => {}}
+        onWorkoutFinished={() => {}}
+      />
+    );
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Начать тренировку|Продолжить/i })).toBeInTheDocument();
     });

@@ -13,21 +13,43 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
-import { fetchAllExercises, fetchTrainingLogsWindow } from '../lib/api';
+import {
+  createWorkoutSession,
+  fetchAllExercises,
+  fetchTrainingLogsWindow,
+  getActiveWorkoutSession,
+  completeWorkoutSession,
+} from '../lib/api';
 import {
   buildTrainingMetricRows,
   computeHomeInsights,
   getTodaySessionStatus,
 } from '../lib/analytics';
 import { CalendarWidget } from './CalendarWidget';
+import type { WorkoutSessionRow } from '../lib/api';
 
 interface HomeScreenProps {
   onOpenExercises: () => void;
   onOpenAnalytics: () => void;
   onOpenHistory: () => void;
+  onSessionStarted: (sessionId: string) => void;
+  onWorkoutFinished: (sessionId: string) => void;
 }
 
-export function HomeScreen({ onOpenExercises, onOpenAnalytics, onOpenHistory }: HomeScreenProps) {
+function formatElapsed(ms: number): string {
+  const sec = Math.floor(ms / 1000);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export function HomeScreen({
+  onOpenExercises,
+  onOpenAnalytics,
+  onOpenHistory,
+  onSessionStarted,
+  onWorkoutFinished,
+}: HomeScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<ReturnType<typeof buildTrainingMetricRows>>([]);
@@ -35,6 +57,33 @@ export function HomeScreen({ onOpenExercises, onOpenAnalytics, onOpenHistory }: 
   const [viewMode, setViewMode] = useState<'today' | 'week'>('today');
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
+  const [activeSession, setActiveSession] = useState<WorkoutSessionRow | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [starting, setStarting] = useState(false);
+  const [finishing, setFinishing] = useState(false);
+
+  // Активная сессия (тренировка в процессе)
+  useEffect(() => {
+    let cancelled = false;
+    getActiveWorkoutSession()
+      .then((s) => {
+        if (!cancelled) setActiveSession(s);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Таймер «Идёт тренировка»
+  useEffect(() => {
+    if (!activeSession) return;
+    const started = new Date(activeSession.started_at).getTime();
+    const tick = () => setElapsedMs(Math.max(0, Date.now() - started));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +144,38 @@ export function HomeScreen({ onOpenExercises, onOpenAnalytics, onOpenHistory }: 
 
   const closeDaySheet = () => setDaySheetDate(null);
 
+  const handleStartWorkout = async () => {
+    setStarting(true);
+    const result = await createWorkoutSession();
+    setStarting(false);
+    if ('error' in result) {
+      setError(result.error.message);
+      return;
+    }
+    setActiveSession({
+      id: result.id,
+      started_at: new Date().toISOString(),
+      ended_at: null,
+      name: null,
+      status: 'active',
+    });
+    setElapsedMs(0);
+    onSessionStarted(result.id);
+  };
+
+  const handleFinishWorkout = async () => {
+    if (!activeSession) return;
+    setFinishing(true);
+    const { error: err } = await completeWorkoutSession(activeSession.id);
+    setFinishing(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setActiveSession(null);
+    onWorkoutFinished(activeSession.id);
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Header & Nav */}
@@ -149,17 +230,45 @@ export function HomeScreen({ onOpenExercises, onOpenAnalytics, onOpenHistory }: 
 
         {!loading && insights && (
           <>
-            {/* CTA Button */}
-            <section>
-              <button
-                type="button"
-                onClick={onOpenExercises}
-                className="w-full py-4 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center justify-center gap-2"
-              >
-                <Dumbbell className="w-5 h-5" />
-                {todayStatus.hasLogs ? 'Продолжить' : 'Начать тренировку'}
-              </button>
-            </section>
+            {/* CTA: активная сессия или старт */}
+            {activeSession ? (
+              <section className="space-y-2">
+                <div className="px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
+                  <span className="text-zinc-400">Идёт тренировка</span>
+                  <span className="font-mono text-emerald-400">{formatElapsed(elapsedMs)}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={onOpenExercises}
+                    className="flex-1 py-4 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Dumbbell className="w-5 h-5" />
+                    Продолжить
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFinishWorkout}
+                    disabled={finishing}
+                    className="px-4 py-4 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-medium disabled:opacity-50"
+                  >
+                    {finishing ? '…' : 'Завершить'}
+                  </button>
+                </div>
+              </section>
+            ) : (
+              <section>
+                <button
+                  type="button"
+                  onClick={handleStartWorkout}
+                  disabled={starting}
+                  className="w-full py-4 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Dumbbell className="w-5 h-5" />
+                  {starting ? 'Создаём тренировку…' : 'Начать тренировку'}
+                </button>
+              </section>
+            )}
 
             {/* Attendance Card */}
             <section

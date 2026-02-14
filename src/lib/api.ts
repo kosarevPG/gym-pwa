@@ -5,6 +5,7 @@ const EXERCISES_TABLE = 'exercises';
 const EQUIPMENT_TABLE = 'equipment';
 const BIOMETRICS_TABLE = 'biometrics';
 const TRAINING_LOGS_TABLE = import.meta.env.VITE_TRAINING_LOGS_TABLE || 'training_logs';
+const WORKOUT_SESSIONS_TABLE = 'workout_sessions';
 
 const LEGACY_EXERCISE_SELECT = 'id, category, name_ru, name_en, weight_type, base_weight, target_weight_kg';
 const V2_EXERCISE_SELECT = [
@@ -670,5 +671,102 @@ export async function saveTrainingLogs(
       code: legacy.error.code || v2.error.code,
       details: legacy.error.details != null ? String(legacy.error.details) : undefined,
     },
+  };
+}
+
+// --- Workout sessions (сессионный подход: одна тренировка = одна запись) ---
+
+export interface WorkoutSessionRow {
+  id: string;
+  started_at: string;
+  ended_at: string | null;
+  name: string | null;
+  status: string;
+}
+
+export async function createWorkoutSession(): Promise<{ id: string } | { error: { message: string } }> {
+  const { data, error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .insert({ status: 'active' })
+    .select('id')
+    .single();
+  if (error) return { error: { message: error.message } };
+  return { id: String(data.id) };
+}
+
+export async function completeWorkoutSession(
+  id: string
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .update({ ended_at: new Date().toISOString(), status: 'completed' })
+    .eq('id', id);
+  if (error) return { error: { message: error.message } };
+  return { error: null };
+}
+
+export async function getActiveWorkoutSession(): Promise<WorkoutSessionRow | null> {
+  const { data, error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .select('id, started_at, ended_at, name, status')
+    .is('ended_at', null)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: String(data.id),
+    started_at: String(data.started_at),
+    ended_at: data.ended_at != null ? String(data.ended_at) : null,
+    name: data.name != null ? String(data.name) : null,
+    status: String(data.status),
+  };
+}
+
+export interface WorkoutSummaryData {
+  durationSec: number;
+  tonnageKg: number;
+  setsCount: number;
+  avgRpe: number | null;
+}
+
+export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSummaryData | null> {
+  const [sessionRes, logsRes] = await Promise.all([
+    supabase.from(WORKOUT_SESSIONS_TABLE).select('started_at, ended_at').eq('id', sessionId).single(),
+    supabase
+      .from(TRAINING_LOGS_TABLE)
+      .select('set_volume, rpe, completed_at, created_at')
+      .eq('set_group_id', sessionId),
+  ]);
+  if (sessionRes.error || !sessionRes.data) return null;
+  const started = new Date(sessionRes.data.started_at).getTime();
+  const ended = sessionRes.data.ended_at
+    ? new Date(sessionRes.data.ended_at).getTime()
+    : Date.now();
+  const durationSec = Math.max(0, Math.floor((ended - started) / 1000));
+
+  const rows = (logsRes.data ?? []) as Array<{
+    set_volume?: number | null;
+    rpe?: number | null;
+    completed_at?: string | null;
+    created_at?: string;
+  }>;
+  let tonnageKg = 0;
+  let rpeSum = 0;
+  let rpeCount = 0;
+  for (const r of rows) {
+    const vol = r.set_volume != null ? Number(r.set_volume) : 0;
+    tonnageKg += vol;
+    if (r.rpe != null && Number(r.rpe) > 0) {
+      rpeSum += Number(r.rpe);
+      rpeCount += 1;
+    }
+  }
+  const avgRpe = rpeCount > 0 ? rpeSum / rpeCount : null;
+  return {
+    durationSec,
+    tonnageKg: Math.round(tonnageKg * 10) / 10,
+    setsCount: rows.length,
+    avgRpe: avgRpe != null ? Math.round(avgRpe * 10) / 10 : null,
   };
 }
