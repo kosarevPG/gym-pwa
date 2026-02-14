@@ -548,28 +548,53 @@ export function ExerciseDetailScreen({
         </>
       )}
 
-      {/* Full Screen History View */}
-      {historyOpen && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col">
-          <header className="p-4 border-b border-zinc-800 flex items-center gap-3">
-            <button onClick={() => setHistoryOpen(false)}><ChevronLeft /></button>
-            <h2 className="font-bold">История</h2>
-          </header>
-          <div className="flex-1 overflow-auto p-4 no-scrollbar">
-            {historyRows.map(row => (
-              <div key={row.id} className="mb-3 p-3 bg-zinc-900 rounded-lg border border-zinc-800">
-                <div className="flex justify-between text-sm text-zinc-400 mb-1">
-                  <span>{new Date(row.createdAt).toLocaleDateString()}</span>
-                  {row.oneRm != null && <span className="text-emerald-500">1RM: {Math.round(row.oneRm)}</span>}
+      {/* Full Screen History View: по дате тренировки, внутри — подходы (вес × повторения · отдых) */}
+      {historyOpen && (() => {
+        const byDate = new Map<string, ExerciseHistoryRow[]>();
+        historyRows.forEach((row) => {
+          const dateStr = new Date(row.createdAt).toLocaleDateString('ru-RU');
+          if (!byDate.has(dateStr)) byDate.set(dateStr, []);
+          byDate.get(dateStr)!.push(row);
+        });
+        const sortedDates = Array.from(byDate.keys()).sort(
+          (a, b) => new Date(b.split('.').reverse().join('-')).getTime() - new Date(a.split('.').reverse().join('-')).getTime()
+        );
+        const formatRest = (sec?: number) => {
+          if (sec == null || sec <= 0) return '0м';
+          const m = Math.round(sec / 60);
+          return m >= 60 ? `${Math.floor(m / 60)}ч ${m % 60}м` : `${m}м`;
+        };
+        return (
+          <div className="fixed inset-0 z-50 bg-black flex flex-col">
+            <header className="p-4 border-b border-zinc-800 flex items-center gap-3">
+              <button onClick={() => setHistoryOpen(false)}><ChevronLeft /></button>
+              <h2 className="font-bold">История</h2>
+            </header>
+            <div className="flex-1 overflow-auto p-4 no-scrollbar">
+              {sortedDates.map((dateStr) => (
+                <div key={dateStr} className="mb-4">
+                  <div className="text-sm font-semibold text-zinc-400 mb-2 px-1">{dateStr}</div>
+                  <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
+                    {(byDate.get(dateStr) ?? []).map((row) => (
+                      <div
+                        key={row.id}
+                        className="px-3 py-2.5 border-b border-zinc-800/50 last:border-b-0 flex items-center justify-between gap-2"
+                      >
+                        <span className="font-medium text-white">
+                          {row.weight} кг × {row.reps}
+                        </span>
+                        <span className="text-zinc-500 text-sm">
+                          отдых {formatRest(row.restSeconds)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-xl font-bold text-white">
-                  {row.weight} кг × {row.reps}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Выбор упражнения для нового блока (+ Сет) */}
       {addSetPickerOpen && (
