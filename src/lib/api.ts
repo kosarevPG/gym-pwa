@@ -95,7 +95,10 @@ export interface LastExerciseSnapshot {
 export interface TrainingLogRaw {
   id: string;
   ts: string;
+  /** ID тренировки из workout_sessions */
   session_id: string;
+  /** Группа подходов (один «Завершить» / суперсет) */
+  set_group_id: string;
   exercise_id: string;
   set_no: number;
   reps: number;
@@ -110,10 +113,13 @@ export interface TrainingLogRaw {
 }
 
 export interface SaveTrainingLogRow {
+  /** ID активной тренировки из workout_sessions */
+  session_id: string;
+  /** ID группы подходов (сет/суперсет), генерируется фронтом */
+  set_group_id: string;
   exercise_id: string;
   weight: number;
   reps: number;
-  set_group_id: string;
   order_index: number;
   input_wt?: number;
   side?: SetSide;
@@ -260,6 +266,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     'id',
     'completed_at',
     'created_at',
+    'session_id',
     'set_group_id',
     'exercise_id',
     'order_index',
@@ -296,7 +303,8 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     return (legacy.data ?? []).map((r) => ({
       id: String(r.id),
       ts: String(r.created_at),
-      session_id: String(r.set_group_id),
+      session_id: String((r as { session_id?: string }).session_id ?? r.set_group_id),
+      set_group_id: String(r.set_group_id),
       exercise_id: String(r.exercise_id),
       set_no: Number(r.order_index ?? 0),
       reps: Number(r.reps ?? 0),
@@ -312,10 +320,10 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
   }
 
   return (v2.data ?? []).map((r) => ({
-    // Supabase side может хранить BOTH/LEFT/RIGHT; в UI держим lower-case
     id: String(r.id),
     ts: String(r.completed_at ?? r.created_at),
-    session_id: String(r.set_group_id),
+    session_id: String((r as { session_id?: string }).session_id ?? r.set_group_id),
+    set_group_id: String(r.set_group_id),
     exercise_id: String(r.exercise_id),
     set_no: Number(r.order_index ?? 0),
     reps: Number(r.reps ?? 0),
@@ -620,10 +628,11 @@ export async function saveTrainingLogs(
   }
 
   const v2Payload = rows.map((r) => ({
+    session_id: String(r.session_id),
+    set_group_id: String(r.set_group_id),
     exercise_id: String(r.exercise_id).trim(),
     weight: Number(r.weight),
     reps: Math.floor(Number(r.reps)) || 0,
-    set_group_id: String(r.set_group_id),
     order_index: Math.floor(Number(r.order_index)) || 0,
     input_wt: r.input_wt != null ? Number(r.input_wt) : Number(r.weight),
     side: (r.side ?? 'both').toUpperCase(),
@@ -646,10 +655,11 @@ export async function saveTrainingLogs(
 
   console.warn('saveTrainingLogs v2 failed, fallback to legacy schema:', v2.error.message);
   const legacyPayload = rows.map((r) => ({
+    session_id: String(r.session_id),
+    set_group_id: String(r.set_group_id),
     exercise_id: String(r.exercise_id).trim(),
     weight: Number(r.weight),
     reps: Math.floor(Number(r.reps)) || 0,
-    set_group_id: String(r.set_group_id),
     order_index: Math.floor(Number(r.order_index)) || 0,
   }));
   const legacy = await supabase.from(TRAINING_LOGS_TABLE).insert(legacyPayload);

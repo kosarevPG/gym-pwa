@@ -178,15 +178,15 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                 {isExpanded && (
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-2 space-y-4">
                     {(() => {
-                      // Суперсет только когда на экране упражнения было два блока (Суперсет) и один «Завершить» — один session_id, один set_no у нескольких упражнений
+                      // Суперсет: один set_group_id (одно нажатие «Завершить») и один set_no у нескольких упражнений
                       const supersetExerciseIds = new Set<string>();
-                      const bySessionId = new Map<string, TrainingLogRaw[]>();
+                      const bySetGroupId = new Map<string, TrainingLogRaw[]>();
                       session.rows.forEach((r) => {
-                        const sid = r.session_id;
-                        if (!bySessionId.has(sid)) bySessionId.set(sid, []);
-                        bySessionId.get(sid)!.push(r);
+                        const gid = r.set_group_id;
+                        if (!bySetGroupId.has(gid)) bySetGroupId.set(gid, []);
+                        bySetGroupId.get(gid)!.push(r);
                       });
-                      bySessionId.forEach((rows) => {
+                      bySetGroupId.forEach((rows) => {
                         const bySetNo = new Map<number, TrainingLogRaw[]>();
                         rows.forEach((r) => {
                           const no = r.set_no;

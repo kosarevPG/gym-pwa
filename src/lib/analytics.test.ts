@@ -23,6 +23,7 @@ function log(overrides: Partial<TrainingLogRaw>): TrainingLogRaw {
     id: 'log1',
     ts: '2025-01-15T10:00:00Z',
     session_id: 's1',
+    set_group_id: 'g1',
     exercise_id: 'ex-uuid-1',
     set_no: 1,
     reps: 8,

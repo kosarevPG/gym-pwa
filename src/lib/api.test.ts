@@ -94,10 +94,11 @@ describe('saveTrainingLogs', () => {
   it('returns error when exercise_id is not UUID', async () => {
     const rows: SaveTrainingLogRow[] = [
       {
+        session_id: '00000000-0000-0000-0000-000000000001',
+        set_group_id: 'sg1',
         exercise_id: 'not-uuid',
         weight: 60,
         reps: 8,
-        set_group_id: 'sg1',
         order_index: 0,
       },
     ];
@@ -112,20 +113,22 @@ describe('saveTrainingLogs', () => {
 
     const rows: SaveTrainingLogRow[] = [
       {
+        session_id: '00000000-0000-0000-0000-000000000001',
+        set_group_id: 'sg1',
         exercise_id: validUuid,
         weight: 60,
         reps: 8,
-        set_group_id: 'sg1',
         order_index: 0,
       },
     ];
     await saveTrainingLogs(rows);
     expect(insertMock).toHaveBeenCalled();
     const payload = insertMock.mock.calls[0][0];
+    expect(payload[0].session_id).toBe('00000000-0000-0000-0000-000000000001');
+    expect(payload[0].set_group_id).toBe('sg1');
     expect(payload[0].exercise_id).toBe(validUuid);
     expect(payload[0].weight).toBe(60);
     expect(payload[0].reps).toBe(8);
-    expect(payload[0].set_group_id).toBe('sg1');
     expect(payload[0].order_index).toBe(0);
   });
 });

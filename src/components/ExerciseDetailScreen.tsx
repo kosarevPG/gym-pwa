@@ -246,10 +246,11 @@ export function ExerciseDetailScreen({
         const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight) ?? 0;
         const rps = parseInt(s.reps) || 0;
         logs.push({
+          session_id: sessionId,
+          set_group_id: saveGroupId,
           exercise_id: block.exercise.id,
           weight: totalKg,
           reps: rps,
-          set_group_id: saveGroupId,
           order_index: orderIndex,
           input_wt: parseFloat(s.inputWeight) || 0,
           side: s.side ?? 'both',
