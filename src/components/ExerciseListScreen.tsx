@@ -30,12 +30,12 @@ function ExerciseCard({
       className="w-full text-left rounded-2xl overflow-hidden bg-zinc-800/80 border border-zinc-700/50 hover:border-zinc-600 active:scale-[0.99] transition-all"
     >
       {/* Крупная область под картинку — ~75% карточки */}
-      <div className="aspect-[4/3] w-full bg-zinc-700/60 relative overflow-hidden">
+      <div className="aspect-[4/3] w-full bg-zinc-700/60 relative flex items-center justify-center overflow-hidden">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt=""
-            className="w-full h-full object-cover object-center"
+            className="w-full h-full object-contain object-center"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-zinc-500 text-4xl">
@@ -44,9 +44,9 @@ function ExerciseCard({
           </div>
         )}
       </div>
-      <div className="p-3">
-        <p className="font-medium text-white truncate">{exercise.nameRu}</p>
-        <p className="text-sm text-zinc-500 truncate">{exercise.nameEn || getCategoryBySlug(exercise.category)?.name}</p>
+      <div className="p-3 min-w-0">
+        <p className="font-medium text-white line-clamp-2 break-words">{exercise.nameRu}</p>
+        <p className="text-sm text-zinc-500 line-clamp-2 break-words">{exercise.nameEn || getCategoryBySlug(exercise.category)?.name}</p>
       </div>
     </button>
   );

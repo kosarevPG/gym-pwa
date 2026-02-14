@@ -31,8 +31,7 @@ function prevWeekKey(current: string): string {
 }
 
 function formatWeekLabel(weekKey: string): string {
-  const d = new Date(`${weekKey}T00:00:00.000Z`);
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+  return weekKey.replace(/-/g, '.');
 }
 
 function getTypeFromExercise(exercise: Exercise): TrainingMetricRow['type'] {
@@ -133,7 +132,7 @@ export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exerci
   const week = weekStart(new Date());
   const prevWeek = prevWeekKey(week);
   const currentWeekCount = attendance.get(week) ?? 0;
-  const streakWeeks = computeAttendanceStreak(attendance, 2);
+  const streakWeeks = computeAttendanceStreak(attendance, 3);
   const currentWeekVolume = weeklyVolume.get(week) ?? 0;
   const currentWeekVolumeRaw = weeklyVolumeRaw.get(week) ?? 0;
 
@@ -149,7 +148,7 @@ export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exerci
   const baselineWeekVolume = median(baselineCandidates);
 
   const ramp = computeRampStatus(rows);
-  const attendanceOk = currentWeekCount >= 2;
+  const attendanceOk = currentWeekCount >= 3;
   const attendanceRecentAvg = (() => {
     const recent = Array.from(attendance.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
@@ -158,7 +157,7 @@ export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exerci
     if (recent.length === 0) return 0;
     return recent.reduce((acc, n) => acc + n, 0) / recent.length;
   })();
-  const baselineAttendanceOk = attendanceRecentAvg >= 2;
+  const baselineAttendanceOk = attendanceRecentAvg >= 3;
   const prevWeekVolume = weeklyVolume.get(prevWeek) ?? 0;
 
   let overloadExercise: string | null = null;

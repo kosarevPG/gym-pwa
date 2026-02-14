@@ -75,10 +75,21 @@ export function HomeScreen({
     };
   }, []);
 
-  // Таймер «Идёт тренировка»
+  // Таймер «Идёт тренировка» — для backdated-сессии считаем от openedAt, иначе от started_at из БД
   useEffect(() => {
     if (!activeSession) return;
-    const started = new Date(activeSession.started_at).getTime();
+    let started: number;
+    try {
+      const raw = sessionStorage.getItem(`gym-backdated-${activeSession.id}`);
+      if (raw) {
+        const { openedAt } = JSON.parse(raw) as { openedAt?: number };
+        started = typeof openedAt === 'number' ? openedAt : new Date(activeSession.started_at).getTime();
+      } else {
+        started = new Date(activeSession.started_at).getTime();
+      }
+    } catch (_) {
+      started = new Date(activeSession.started_at).getTime();
+    }
     const tick = () => setElapsedMs(Math.max(0, Date.now() - started));
     tick();
     const interval = setInterval(tick, 1000);
@@ -119,7 +130,7 @@ export function HomeScreen({
 
   const todayStatus = useMemo(() => getTodaySessionStatus(rows), [rows]);
 
-  const weeklyTarget = 2;
+  const weeklyTarget = 3;
   const currentWeekCount = insights?.currentWeekCount ?? 0;
   const weeklyRatio = Math.min(1, currentWeekCount / Math.max(1, weeklyTarget));
 
@@ -145,6 +156,7 @@ export function HomeScreen({
   const closeDaySheet = () => setDaySheetDate(null);
 
   const handleStartWorkout = async () => {
+    setError(null);
     setStarting(true);
     const result = await createWorkoutSession();
     setStarting(false);
@@ -165,6 +177,7 @@ export function HomeScreen({
 
   /** Старт тренировки на выбранную в календаре дату — сессия в БД будет с этой датой. */
   const handleStartWorkoutOnDate = async (dateYyyyMmDd: string) => {
+    setError(null);
     setStarting(true);
     const startedAt = `${dateYyyyMmDd}T12:00:00.000Z`;
     const result = await createWorkoutSession({ startedAt });
@@ -174,6 +187,9 @@ export function HomeScreen({
       return;
     }
     const openedAt = Date.now();
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'HomeScreen.tsx:handleStartWorkoutOnDate', message: 'backdated session created', data: { sessionId: result.id, startedAt, openedAt }, timestamp: Date.now(), hypothesisId: 'H1,H5' }) }).catch(() => {});
+    // #endregion
     try {
       sessionStorage.setItem(
         `gym-backdated-${result.id}`,
@@ -195,12 +211,16 @@ export function HomeScreen({
 
   const handleFinishWorkout = async () => {
     if (!activeSession) return;
+    setError(null);
     setFinishing(true);
     let backdated: { startedAt: string; openedAt: number } | null = null;
     try {
       const raw = sessionStorage.getItem(`gym-backdated-${activeSession.id}`);
       if (raw) backdated = JSON.parse(raw);
     } catch (_) {}
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'HomeScreen.tsx:handleFinishWorkout', message: 'completing session', data: { activeSessionId: activeSession.id, hasBackdated: !!backdated, backdatedStartedAt: backdated?.startedAt }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+    // #endregion
     const { error: err } = await completeWorkoutSession(activeSession.id, backdated ?? undefined);
     if (backdated) {
       try {
@@ -246,18 +266,20 @@ export function HomeScreen({
               <button
                 type="button"
                 onClick={onOpenHistory}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium flex items-center gap-1.5"
                 aria-label="История"
               >
-                <History className="w-5 h-5" />
+                <History className="w-4 h-4 shrink-0" />
+                История
               </button>
               <button
                 type="button"
                 onClick={onOpenAnalytics}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
+                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium flex items-center gap-1.5"
                 aria-label="Аналитика"
               >
-                <BarChart3 className="w-5 h-5" />
+                <BarChart3 className="w-4 h-4 shrink-0" />
+                Аналитика
               </button>
             </div>
           </div>
@@ -325,7 +347,7 @@ export function HomeScreen({
                   <p className="text-2xl font-semibold">
                     {currentWeekCount} / {weeklyTarget}
                   </p>
-                  <p className="text-xs text-zinc-500">Серия недель ≥2: {insights.streakWeeks}</p>
+                  <p className="text-xs text-zinc-500">Серия недель ≥3: {insights.streakWeeks}</p>
                 </div>
                 <CalendarDays className="w-7 h-7 text-zinc-500 shrink-0" />
               </div>
@@ -335,28 +357,6 @@ export function HomeScreen({
                   style={{ width: `${weeklyRatio * 100}%` }}
                 />
               </div>
-            </section>
-
-            {/* Today Plan / Status */}
-            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900">
-              <p className="text-zinc-400 text-sm">План на сегодня</p>
-              <p className="mt-1 text-sm">
-                Тренировка №{Math.min(currentWeekCount + 1, Math.max(weeklyTarget, currentWeekCount + 1))}
-                {insights.ramp.active && ` · Ramp`}
-              </p>
-              {insights.ramp.active && (
-                <p className="text-xs text-zinc-500 mt-1">
-                  Разрыв: {insights.ramp.gapDays} дн., сессий ramp: {insights.ramp.sessionsRemaining}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={onOpenExercises}
-                className="mt-3 text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
-              >
-                Открыть план
-                <ChevronDown className="w-4 h-4 rotate-[270deg]" />
-              </button>
             </section>
 
             {/* Нагрузка: по выбранному периоду (Сегодня / Неделя) */}
@@ -369,16 +369,16 @@ export function HomeScreen({
             >
               <div className="flex items-center justify-between">
                 <p className="text-zinc-400 text-sm">
-                  {viewMode === 'today' ? 'Объём за сегодня' : 'Нагрузка за неделю'}
+                  {viewMode === 'today' ? 'Объём за сегодня' : 'Объём за неделю'}
                 </p>
                 {viewMode === 'week' && weeklyArrow}
               </div>
               <p className="text-sm mt-1">
                 {viewMode === 'today'
-                  ? `${Math.round(insights.currentDayVolume)} кг·повт`
-                  : `${Math.round(insights.currentWeekVolume || insights.currentWeekVolumeRaw)} кг·повт`}
+                  ? `${Math.round(insights.currentDayVolume).toLocaleString('ru-RU')} кг·повт`
+                  : `${Math.round(insights.currentWeekVolume || insights.currentWeekVolumeRaw).toLocaleString('ru-RU')} кг·повт`}
                 {viewMode === 'week' && insights.baselineWeekVolume != null && (
-                  <span className="text-zinc-500"> / baseline {Math.round(insights.baselineWeekVolume)}</span>
+                  <span className="text-zinc-500"> / baseline {Math.round(insights.baselineWeekVolume).toLocaleString('ru-RU')}</span>
                 )}
               </p>
             </section>
@@ -446,11 +446,7 @@ export function HomeScreen({
           >
             <div className="flex items-center justify-between mb-4">
               <p className="text-zinc-400 text-sm">
-                {new Date(daySheetDate + 'T12:00:00').toLocaleDateString('ru-RU', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
+                {daySheetDate.replace(/-/g, '.')}
               </p>
               <button
                 type="button"

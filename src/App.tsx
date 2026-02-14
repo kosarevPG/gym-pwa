@@ -25,6 +25,9 @@ export default function App() {
 
   useEffect(() => {
     getActiveWorkoutSession().then((active) => {
+      // #region agent log
+      if (active) fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'App.tsx:useEffect', message: 'getActiveWorkoutSession result', data: { sessionId: active.id, started_at: active.started_at }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
+      // #endregion
       if (active) setSessionId(active.id);
     }).catch(() => {});
   }, []);

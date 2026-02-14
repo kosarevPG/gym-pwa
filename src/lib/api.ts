@@ -775,12 +775,11 @@ export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSumma
     Math.floor((new Date(ended).getTime() - new Date(started).getTime()) / 1000)
   );
 
-  // Логи тренировки — по временному окну (set_group_id не привязан к workout_sessions, чтобы суперсеты работали)
+  // Логи по session_id (для backdated-тренировок логи имеют created_at=now, но session_id совпадает)
   const logsRes = await supabase
     .from(TRAINING_LOGS_TABLE)
     .select('set_volume, rpe, created_at')
-    .gte('created_at', started)
-    .lte('created_at', ended);
+    .eq('session_id', sessionId);
   if (logsRes.error) return null;
 
   const rows = (logsRes.data ?? []) as Array<{
@@ -789,6 +788,9 @@ export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSumma
     completed_at?: string | null;
     created_at?: string;
   }>;
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'api.ts:getWorkoutSummary', message: 'logs in session window', data: { sessionId, started, ended, logsCount: rows.length }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
+  // #endregion
   let tonnageKg = 0;
   let rpeSum = 0;
   let rpeCount = 0;

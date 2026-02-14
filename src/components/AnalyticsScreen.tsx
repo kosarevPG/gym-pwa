@@ -35,7 +35,9 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
       const metricRows = buildTrainingMetricRows(logs, ex);
       setRows(metricRows);
       setExercises(ex);
-      if (!selectedExerciseId && ex.length > 0) setSelectedExerciseId(ex[0].id);
+      const idsWithData = new Set(metricRows.map((r) => r.exerciseId));
+      const firstWithData = ex.find((e) => idsWithData.has(e.id))?.id ?? '';
+      setSelectedExerciseId((prev) => (idsWithData.has(prev) ? prev : firstWithData));
       setLoading(false);
     })();
     return () => {
@@ -53,6 +55,11 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
     () => [...trendRows].sort((a, b) => b.riskScore - a.riskScore).filter((x) => x.riskScore > 0).slice(0, 5),
     [trendRows],
   );
+
+  const exercisesWithData = useMemo(() => {
+    const ids = new Set(rows.map((r) => r.exerciseId));
+    return exercises.filter((e) => ids.has(e.id));
+  }, [rows, exercises]);
 
   const selectedExerciseRows = useMemo(
     () => rows.filter((r) => r.exerciseId === selectedExerciseId),
@@ -188,9 +195,13 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
                 onChange={(e) => setSelectedExerciseId(e.target.value)}
                 className="w-full mt-2 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2"
               >
-                {exercises.map((ex) => (
-                  <option key={ex.id} value={ex.id}>{ex.nameRu}</option>
-                ))}
+                {exercisesWithData.length === 0 ? (
+                  <option value="">Нет данных за период</option>
+                ) : (
+                  exercisesWithData.map((ex) => (
+                    <option key={ex.id} value={ex.id}>{ex.nameRu}</option>
+                  ))
+                )}
               </select>
             </section>
 
@@ -248,7 +259,7 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
               <ul className="space-y-2 text-sm">
                 {gaps.map((g, idx) => (
                   <li key={`${g.from}-${idx}`} className="p-2 rounded-lg bg-zinc-800/60">
-                    <div>{new Date(g.from).toLocaleDateString('ru-RU')} → {new Date(g.to).toLocaleDateString('ru-RU')}</div>
+                    <div>{new Date(g.from).toISOString().slice(0, 10).replace(/-/g, '.')} → {new Date(g.to).toISOString().slice(0, 10).replace(/-/g, '.')}</div>
                     <div className="text-zinc-400 text-xs">разрыв: {g.days} дней</div>
                   </li>
                 ))}

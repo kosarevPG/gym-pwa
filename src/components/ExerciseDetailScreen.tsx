@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X, Pencil, Trash2, Search, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X, Pencil, Trash2, Search, Loader2 } from 'lucide-react';
 import {
   saveTrainingLogs,
   fetchExerciseHistory,
@@ -94,6 +94,22 @@ export function ExerciseDetailScreen({
   const [addSetSearchResults, setAddSetSearchResults] = useState<ExerciseType[]>([]);
   const [addSetSearching, setAddSetSearching] = useState(false);
   const setInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const NOTE_STORAGE_KEY = `gym-exercise-note-${sessionId}-${exercise.id}`;
+  const [noteExpanded, setNoteExpanded] = useState(false);
+  const [noteText, setNoteText] = useState(() => {
+    try {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem(NOTE_STORAGE_KEY) ?? '' : '';
+    } catch (_) {
+      return '';
+    }
+  });
+  const saveNote = useCallback((text: string) => {
+    setNoteText(text);
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(NOTE_STORAGE_KEY, text);
+    } catch (_) {}
+  }, [NOTE_STORAGE_KEY]);
 
   const selectAllOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.select();
@@ -241,7 +257,16 @@ export function ExerciseDetailScreen({
 
     // Один set_group_id на одно нажатие «Завершить» — иначе в истории ломается определение суперсетов
     const saveGroupId = crypto.randomUUID();
+    let backdatedStartedAt: string | null = null;
+    try {
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(`gym-backdated-${sessionId}`) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as { startedAt?: string };
+        backdatedStartedAt = parsed?.startedAt ?? null;
+      }
+    } catch (_) {}
     const logs: Parameters<typeof saveTrainingLogs>[0] = [];
+    let logOrderOffset = 0;
     for (let round = 1; round <= maxRounds; round++) {
       const orderIndex = round;
       for (const block of blocks) {
@@ -251,6 +276,14 @@ export function ExerciseDetailScreen({
         // Передаем bodyWeight для корректного расчета Effective Load в логах
         const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight, bodyWeight ?? undefined) ?? 0;
         const rps = parseInt(s.reps) || 0;
+        let completedAt: string;
+        if (backdatedStartedAt) {
+          const baseMs = new Date(backdatedStartedAt).getTime();
+          completedAt = new Date(baseMs + logOrderOffset * 60 * 1000).toISOString();
+          logOrderOffset += 1;
+        } else {
+          completedAt = s.doneAt ?? new Date().toISOString();
+        }
         logs.push({
           session_id: sessionId,
           set_group_id: saveGroupId,
@@ -264,13 +297,20 @@ export function ExerciseDetailScreen({
           set_volume: totalKg * rps,
           rpe: s.rpe ? parseFloat(s.rpe) : undefined,
           rest_seconds: (parseFloat(s.restMin) || 0) * 60,
-          completed_at: s.doneAt ?? new Date().toISOString(),
+          completed_at: completedAt,
         });
       }
     }
 
-    await saveTrainingLogs(logs);
+    // #region agent log
+    if (logs.length > 0) fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ExerciseDetailScreen.tsx:handleFinish', message: 'saving logs', data: { sessionId, firstCompletedAt: logs[0].completed_at, logsCount: logs.length }, timestamp: Date.now(), hypothesisId: 'H4' }) }).catch(() => {});
+    // #endregion
+    const { error: saveErr } = await saveTrainingLogs(logs);
     setSaving(false);
+    if (saveErr) {
+      alert(saveErr.message || 'Не удалось сохранить подходы. Проверьте сеть и попробуйте снова.');
+      return;
+    }
     onComplete();
   };
 
@@ -487,6 +527,34 @@ export function ExerciseDetailScreen({
           );
         })}
 
+        {/* Заметка: сворачивается/разворачивается, сохраняется в localStorage */}
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setNoteExpanded((e) => !e)}
+            className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/50 transition-colors"
+          >
+            <span className="text-sm font-medium text-zinc-300">Заметка</span>
+            {noteExpanded ? (
+              <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
+            ) : (
+              <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />
+            )}
+          </button>
+          {noteExpanded && (
+            <div className="border-t border-zinc-800 px-4 pb-4 pt-2">
+              <textarea
+                value={noteText}
+                onChange={(e) => saveNote(e.target.value)}
+                onBlur={(e) => saveNote(e.target.value)}
+                placeholder="Текст заметки к упражнению..."
+                rows={3}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y min-h-[80px]"
+              />
+            </div>
+          )}
+        </section>
+
         {/* Spacer for bottom button */}
         <div className="h-24" />
       </div>
@@ -552,12 +620,12 @@ export function ExerciseDetailScreen({
       {historyOpen && (() => {
         const byDate = new Map<string, ExerciseHistoryRow[]>();
         historyRows.forEach((row) => {
-          const dateStr = new Date(row.createdAt).toLocaleDateString('ru-RU');
+          const dateStr = new Date(row.createdAt).toISOString().slice(0, 10).replace(/-/g, '.');
           if (!byDate.has(dateStr)) byDate.set(dateStr, []);
           byDate.get(dateStr)!.push(row);
         });
         const sortedDates = Array.from(byDate.keys()).sort(
-          (a, b) => new Date(b.split('.').reverse().join('-')).getTime() - new Date(a.split('.').reverse().join('-')).getTime()
+          (a, b) => new Date(b.replace(/\./g, '-')).getTime() - new Date(a.replace(/\./g, '-')).getTime()
         );
         const formatRest = (sec?: number) => {
           if (sec == null || sec <= 0) return '0м';
