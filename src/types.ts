@@ -63,6 +63,11 @@ export interface WorkoutSet {
   estimated1Rm?: number;
   volume?: number;
   effectiveLoad?: number;
+  /** Второе упражнение в сете (суперсет): данные для отображения и расчёта */
+  supersetExercise?: Pick<Exercise, 'id' | 'nameRu' | 'weightType' | 'baseWeight'>;
+  supersetInputWeight?: string;
+  supersetReps?: string;
+  supersetRestMin?: string;
 }
 
 export interface WorkoutSession {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, Trophy, Calendar, MoreVertical, Plus, Check, Timer, History, X, Pencil, Trash2, Search, Loader2 } from 'lucide-react';
 import {
   saveTrainingLogs,
   fetchExerciseHistory,
@@ -7,6 +7,7 @@ import {
   fetchLastExerciseSessionSets,
   fetchPersonalBestWeight,
   fetchLatestBodyWeight,
+  searchExercises,
   type ExerciseHistoryRow,
 } from '../lib/api';
 import { WEIGHT_FORMULAS, getWeightInputType, allows1rm } from '../exerciseConfig';
@@ -76,7 +77,15 @@ export function ExerciseDetailScreen({
   const [menuOpen, setMenuOpen] = useState(false);
   const [swipeState, setSwipeState] = useState<{ setId: string; startX: number; offset: number } | null>(null);
   const [revealedDeleteSetId, setRevealedDeleteSetId] = useState<string | null>(null);
+  const [supersetPickerOpen, setSupersetPickerOpen] = useState(false);
+  const [supersetSearchQuery, setSupersetSearchQuery] = useState('');
+  const [supersetSearchResults, setSupersetSearchResults] = useState<ExerciseType[]>([]);
+  const [supersetSearching, setSupersetSearching] = useState(false);
   const setInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const selectAllOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  };
 
   const weightType = getWeightType(exercise);
 
@@ -116,6 +125,25 @@ export function ExerciseDetailScreen({
     return () => clearInterval(interval);
   }, [restCountdownSec]);
 
+  // Поиск упражнений для суперсета
+  useEffect(() => {
+    if (!supersetPickerOpen) return;
+    const q = supersetSearchQuery.trim();
+    if (!q) {
+      setSupersetSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    setSupersetSearching(true);
+    searchExercises(q, 15).then((list) => {
+      if (!cancelled) {
+        setSupersetSearchResults(list.filter((ex) => ex.id !== exercise.id));
+        setSupersetSearching(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [supersetPickerOpen, supersetSearchQuery, exercise.id]);
+
   // --- LOGIC ---
   const updateSet = (id: string, patch: Partial<WorkoutSet>) => {
     setSets(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
@@ -144,6 +172,29 @@ export function ExerciseDetailScreen({
       return next.map((s, i) => ({ ...s, order: i + 1 }));
     });
     setRevealedDeleteSetId(null);
+  };
+
+  const addSupersetToLastSet = (ex: ExerciseType) => {
+    if (sets.length === 0) return;
+    const last = sets[sets.length - 1];
+    updateSet(last.id, {
+      supersetExercise: { id: ex.id, nameRu: ex.nameRu, weightType: ex.weightType, baseWeight: ex.baseWeight },
+      supersetInputWeight: '',
+      supersetReps: '',
+      supersetRestMin: '2',
+    });
+    setSupersetPickerOpen(false);
+    setSupersetSearchQuery('');
+    setSupersetSearchResults([]);
+  };
+
+  const removeSupersetFromSet = (setId: string) => {
+    updateSet(setId, {
+      supersetExercise: undefined,
+      supersetInputWeight: undefined,
+      supersetReps: undefined,
+      supersetRestMin: undefined,
+    });
   };
 
   const toggleSetComplete = (setId: string) => {
@@ -182,15 +233,15 @@ export function ExerciseDetailScreen({
     const validSets = sets.filter(s => s.completed || (s.inputWeight && s.reps));
 
     if (validSets.length === 0) {
-      onComplete(); // Если ничего не делали, просто выходим
+      onComplete();
       return;
     }
 
-    const logs = validSets.map(s => {
+    const logs: Parameters<typeof saveTrainingLogs>[0] = [];
+    for (const s of validSets) {
       const totalKg = calcTotalKg(s.inputWeight, weightType, exercise.baseWeight) ?? 0;
       const rps = parseInt(s.reps) || 0;
-      const vol = totalKg * rps;
-      return {
+      logs.push({
         exercise_id: exercise.id,
         weight: totalKg,
         reps: rps,
@@ -198,14 +249,31 @@ export function ExerciseDetailScreen({
         order_index: s.order,
         input_wt: parseFloat(s.inputWeight) || 0,
         side: s.side ?? 'both',
-        set_volume: vol,
+        set_volume: totalKg * rps,
         rpe: s.rpe ? parseFloat(s.rpe) : undefined,
         rest_seconds: (parseFloat(s.restMin) || 0) * 60,
         completed_at: s.doneAt ?? new Date().toISOString(),
-      };
-    });
+      });
+      if (s.supersetExercise && (s.supersetInputWeight || s.supersetReps)) {
+        const supType = getWeightType(s.supersetExercise as ExerciseType);
+        const supKg = calcTotalKg(s.supersetInputWeight ?? '', supType, s.supersetExercise.baseWeight) ?? 0;
+        const supRps = parseInt(s.supersetReps ?? '') || 0;
+        logs.push({
+          exercise_id: s.supersetExercise.id,
+          weight: supKg,
+          reps: supRps,
+          set_group_id: sessionId,
+          order_index: s.order,
+          input_wt: parseFloat(s.supersetInputWeight ?? '') || 0,
+          side: 'both',
+          set_volume: supKg * supRps,
+          rest_seconds: (parseFloat(s.supersetRestMin ?? '0') || 0) * 60,
+          completed_at: s.doneAt ?? new Date().toISOString(),
+        });
+      }
+    }
 
-    await saveTrainingLogs(logs as Parameters<typeof saveTrainingLogs>[0]);
+    await saveTrainingLogs(logs);
     setSaving(false);
     onComplete();
   };
@@ -318,6 +386,7 @@ export function ExerciseDetailScreen({
                           inputMode="decimal"
                           value={set.inputWeight}
                           onChange={e => updateSet(set.id, { inputWeight: e.target.value })}
+                          onFocus={selectAllOnFocus}
                           placeholder={lastSnapshot ? String(lastSnapshot.weight) : '0'}
                           className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                         />
@@ -329,6 +398,7 @@ export function ExerciseDetailScreen({
                           inputMode="numeric"
                           value={set.reps}
                           onChange={e => updateSet(set.id, { reps: e.target.value })}
+                          onFocus={selectAllOnFocus}
                           placeholder={lastSnapshot ? String(lastSnapshot.reps) : '0'}
                           className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                         />
@@ -340,6 +410,7 @@ export function ExerciseDetailScreen({
                             type="number"
                             value={set.restMin}
                             onChange={e => updateSet(set.id, { restMin: e.target.value })}
+                            onFocus={selectAllOnFocus}
                             className={`w-10 bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                           />
                           <span className="text-xs text-zinc-500">м</span>
@@ -347,6 +418,44 @@ export function ExerciseDetailScreen({
                       </div>
                     </div>
                   </div>
+
+                  {set.supersetExercise && (
+                    <div className="border-t border-zinc-800/50 px-3 py-2 bg-zinc-800/30 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-zinc-400 flex-1 min-w-0 truncate">+ {set.supersetExercise.nameRu}</span>
+                      <button type="button" onClick={() => removeSupersetFromSet(set.id)} className="p-1 text-zinc-500 hover:text-red-400" aria-label="Убрать второе упражнение">
+                        <X className="w-4 h-4" />
+                      </button>
+                      <div className="flex items-center gap-2 w-full">
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="Вес"
+                          value={set.supersetInputWeight ?? ''}
+                          onChange={e => updateSet(set.id, { supersetInputWeight: e.target.value })}
+                          onFocus={selectAllOnFocus}
+                          className="w-14 bg-zinc-800/80 rounded-lg px-2 py-1.5 text-center text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="Повт"
+                          value={set.supersetReps ?? ''}
+                          onChange={e => updateSet(set.id, { supersetReps: e.target.value })}
+                          onFocus={selectAllOnFocus}
+                          className="w-14 bg-zinc-800/80 rounded-lg px-2 py-1.5 text-center text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <input
+                          type="number"
+                          placeholder="Отдых"
+                          value={set.supersetRestMin ?? ''}
+                          onChange={e => updateSet(set.id, { supersetRestMin: e.target.value })}
+                          onFocus={selectAllOnFocus}
+                          className="w-12 bg-zinc-800/80 rounded-lg px-2 py-1.5 text-center text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-zinc-500">м</span>
+                      </div>
+                    </div>
+                  )}
 
                   {!isDone && (
                     <div className="bg-zinc-950/50 px-3 py-2 flex items-center gap-2 border-t border-zinc-800/50">
@@ -383,14 +492,27 @@ export function ExerciseDetailScreen({
           );
         })}
 
-        {/* Add Set Button */}
-        <button
-          onClick={addSet}
-          className="w-full py-4 rounded-2xl border-2 border-dashed border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/50 transition-all flex items-center justify-center gap-2 font-medium"
-        >
-          <Plus className="w-5 h-5" />
-          Добавить подход
-        </button>
+        {/* Add Set + Add second exercise to set */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={addSet}
+            className="flex-1 py-4 rounded-2xl border-2 border-dashed border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/50 transition-all flex items-center justify-center gap-2 font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            Добавить подход
+          </button>
+          <button
+            type="button"
+            onClick={() => sets.length > 0 && setSupersetPickerOpen(true)}
+            disabled={sets.length === 0 || (sets.length > 0 && !!sets[sets.length - 1].supersetExercise)}
+            className="flex-shrink-0 px-4 py-4 rounded-2xl border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-700 disabled:opacity-50 disabled:pointer-events-none transition-all flex items-center justify-center gap-1.5 font-medium text-sm"
+            title="Добавить второе упражнение в последний подход"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">2-е упр.</span>
+          </button>
+        </div>
 
         {/* Spacer for bottom button */}
         <div className="h-24" />
@@ -471,6 +593,52 @@ export function ExerciseDetailScreen({
                   {row.weight} кг × {row.reps}
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Выбор второго упражнения в подход (суперсет) */}
+      {supersetPickerOpen && (
+        <div className="fixed inset-0 z-50 bg-black flex flex-col">
+          <header className="p-4 border-b border-zinc-800 flex items-center gap-3">
+            <button type="button" onClick={() => { setSupersetPickerOpen(false); setSupersetSearchQuery(''); setSupersetSearchResults([]); }}>
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <h2 className="font-bold">Второе упражнение в подход</h2>
+          </header>
+          <div className="p-4 border-b border-zinc-800">
+            <div className="relative flex items-center gap-2">
+              <Search className="absolute left-3 w-4 h-4 text-zinc-500 pointer-events-none" />
+              <input
+                type="text"
+                value={supersetSearchQuery}
+                onChange={e => setSupersetSearchQuery(e.target.value)}
+                placeholder="Поиск по названию..."
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto p-4">
+            {supersetSearching && (
+              <div className="flex justify-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+              </div>
+            )}
+            {!supersetSearching && supersetSearchQuery.trim() && supersetSearchResults.length === 0 && (
+              <p className="text-zinc-500 text-center py-6">Ничего не найдено</p>
+            )}
+            {!supersetSearching && supersetSearchResults.map((ex) => (
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => addSupersetToLastSet(ex)}
+                className="w-full text-left p-4 rounded-xl bg-zinc-800/80 border border-zinc-700 hover:bg-zinc-700 mb-2"
+              >
+                <span className="font-medium text-white">{ex.nameRu}</span>
+                {ex.nameEn && <span className="text-zinc-500 text-sm ml-2">/{ex.nameEn}</span>}
+              </button>
             ))}
           </div>
         </div>
