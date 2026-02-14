@@ -163,10 +163,50 @@ export function HomeScreen({
     onSessionStarted(result.id);
   };
 
+  /** Старт тренировки на выбранную в календаре дату — сессия в БД будет с этой датой. */
+  const handleStartWorkoutOnDate = async (dateYyyyMmDd: string) => {
+    setStarting(true);
+    const startedAt = `${dateYyyyMmDd}T12:00:00.000Z`;
+    const result = await createWorkoutSession({ startedAt });
+    setStarting(false);
+    if ('error' in result) {
+      setError(result.error.message);
+      return;
+    }
+    const openedAt = Date.now();
+    try {
+      sessionStorage.setItem(
+        `gym-backdated-${result.id}`,
+        JSON.stringify({ startedAt, openedAt })
+      );
+    } catch (_) {}
+    setActiveSession({
+      id: result.id,
+      started_at: new Date().toISOString(),
+      ended_at: null,
+      name: null,
+      status: 'active',
+    });
+    setElapsedMs(0);
+    closeDaySheet();
+    setIsCalendarOpen(false);
+    onSessionStarted(result.id);
+  };
+
   const handleFinishWorkout = async () => {
     if (!activeSession) return;
     setFinishing(true);
-    const { error: err } = await completeWorkoutSession(activeSession.id);
+    let backdated: { startedAt: string; openedAt: number } | null = null;
+    try {
+      const raw = sessionStorage.getItem(`gym-backdated-${activeSession.id}`);
+      if (raw) backdated = JSON.parse(raw);
+    } catch (_) {}
+    const { error: err } = await completeWorkoutSession(activeSession.id, backdated ?? undefined);
+    if (backdated) {
+      try {
+        sessionStorage.removeItem(`gym-backdated-${activeSession.id}`);
+      } catch (_) {}
+    }
     setFinishing(false);
     if (err) {
       setError(err.message);
@@ -424,14 +464,12 @@ export function HomeScreen({
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  closeDaySheet();
-                  onOpenExercises();
-                }}
-                className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 flex items-center gap-3 text-left"
+                disabled={starting}
+                onClick={() => daySheetDate && handleStartWorkoutOnDate(daySheetDate)}
+                className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 flex items-center gap-3 text-left disabled:opacity-50"
               >
                 <Plus className="w-5 h-5 text-blue-400" />
-                Добавить тренировку
+                {starting ? 'Создание…' : 'Добавить тренировку'}
               </button>
               <button
                 type="button"

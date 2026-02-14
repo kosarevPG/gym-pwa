@@ -699,22 +699,36 @@ export interface WorkoutSessionRow {
   status: string;
 }
 
-export async function createWorkoutSession(): Promise<{ id: string } | { error: { message: string } }> {
+/** Создать сессию. startedAt — опционально для тренировки «на выбранную дату» (календарь). */
+export async function createWorkoutSession(opts?: {
+  startedAt?: string;
+}): Promise<{ id: string } | { error: { message: string } }> {
+  const started_at = opts?.startedAt ?? new Date().toISOString();
   const { data, error } = await supabase
     .from(WORKOUT_SESSIONS_TABLE)
-    .insert({ status: 'active' })
+    .insert({ status: 'active', started_at })
     .select('id')
     .single();
   if (error) return { error: { message: error.message } };
   return { id: String(data.id) };
 }
 
+/** Завершить сессию. Для «тренировки на дату» передать startedAt + openedAt — ended_at будет на ту же дату. */
 export async function completeWorkoutSession(
-  id: string
+  id: string,
+  opts?: { startedAt: string; openedAt: number }
 ): Promise<{ error: { message: string } | null }> {
+  let ended_at: string;
+  if (opts?.startedAt != null && opts?.openedAt != null) {
+    const startedMs = new Date(opts.startedAt).getTime();
+    const durationMs = Date.now() - opts.openedAt;
+    ended_at = new Date(startedMs + durationMs).toISOString();
+  } else {
+    ended_at = new Date().toISOString();
+  }
   const { error } = await supabase
     .from(WORKOUT_SESSIONS_TABLE)
-    .update({ ended_at: new Date().toISOString(), status: 'completed' })
+    .update({ ended_at, status: 'completed' })
     .eq('id', id);
   if (error) return { error: { message: error.message } };
   return { error: null };
