@@ -81,8 +81,11 @@ export const WEIGHT_FORMULAS: Record<WeightInputType, WeightFormula> = {
   },
 };
 
-/** equipmentType/weightType из API → WeightInputType */
+/** equipmentType/weightType из API → WeightInputType. Сначала проверяем название/оборудование (гравитрон = assisted). */
 export function getWeightInputType(equipmentType?: string, weightType?: string): WeightInputType {
+  const t = (equipmentType || '').toLowerCase();
+  if (t.includes('гравитрон') || t.includes('assist')) return 'assisted';
+
   const wt = (weightType || '').toLowerCase();
   if (wt === 'barbell') return 'barbell';
   if (wt === 'plate_loaded') return 'plate_loaded';
@@ -91,11 +94,10 @@ export function getWeightInputType(equipmentType?: string, weightType?: string):
   if (wt === 'assisted') return 'assisted';
   if (wt === 'bodyweight') return 'bodyweight';
 
-  const t = (equipmentType || '').toLowerCase();
   if (t === 'barbell') return 'barbell';
   if (t === 'dumbbell') return 'dumbbell';
   if (t === 'machine') return 'machine';
-  if (t === 'assisted' || t.includes('assist') || t.includes('гравитрон')) return 'assisted';
+  if (t === 'assisted') return 'assisted';
   return 'standard';
 }
 

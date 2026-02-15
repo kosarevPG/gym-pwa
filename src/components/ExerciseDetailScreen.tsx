@@ -27,8 +27,8 @@ interface ExerciseDetailScreenProps {
 
 // Утилиты для расчетов
 function getWeightType(ex: ExerciseType): WeightInputType {
-  const t = ex.weightType ?? 'barbell';
-  return getWeightInputType(undefined, t);
+  const nameOrEquipment = [ex.nameRu, ex.nameEn].filter(Boolean).join(' ') || undefined;
+  return getWeightInputType(nameOrEquipment, ex.weightType ?? 'barbell');
 }
 
 /**
@@ -64,6 +64,55 @@ function createSetForExercise(ex: ExerciseType, order: number): WorkoutSet {
     side: 'both',
     supersetExerciseId: null,
   };
+}
+
+const DRAFT_KEY_PREFIX = 'gym-draft-';
+
+type DraftBlock = { exerciseId: string; sets: Array<{ inputWeight: string; reps: string; restMin: string; rpe: string; completed: boolean; order: number; side: string }> };
+
+function getDraftKey(sessionId: string, exerciseId: string): string {
+  return `${DRAFT_KEY_PREFIX}${sessionId}-${exerciseId}`;
+}
+
+function saveDraftToStorage(sessionId: string, exerciseId: string, blocks: ExerciseBlock[]): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    const data: { blocks: DraftBlock[] } = {
+      blocks: blocks.map((b) => ({
+        exerciseId: b.exercise.id,
+        sets: b.sets.map((s) => ({
+          inputWeight: s.inputWeight,
+          reps: s.reps,
+          restMin: s.restMin,
+          rpe: s.rpe,
+          completed: s.completed,
+          order: s.order,
+          side: String(s.side ?? 'both'),
+        })),
+      })),
+    };
+    sessionStorage.setItem(getDraftKey(sessionId, exerciseId), JSON.stringify(data));
+  } catch (_) {}
+}
+
+function loadDraftFromStorage(sessionId: string, exerciseId: string): DraftBlock[] | null {
+  try {
+    if (typeof sessionStorage === 'undefined') return null;
+    const raw = sessionStorage.getItem(getDraftKey(sessionId, exerciseId));
+    if (!raw) return null;
+    const data = JSON.parse(raw) as { blocks?: DraftBlock[] };
+    if (!Array.isArray(data?.blocks) || data.blocks.length === 0) return null;
+    return data.blocks;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearDraftFromStorage(sessionId: string, exerciseId: string): void {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.removeItem(getDraftKey(sessionId, exerciseId));
+  } catch (_) {}
 }
 
 export function ExerciseDetailScreen({
@@ -121,30 +170,66 @@ export function ExerciseDetailScreen({
       fetchPersonalBestWeight(exercise.id),
       fetchLatestBodyWeight(),
     ]).then(([last, pb, bw]) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ExerciseDetailScreen.tsx:useEffect fetchLatestBodyWeight', message: 'bodyWeight loaded', data: { exerciseId: exercise.id, nameRu: exercise.nameRu, bodyWeight: bw }, timestamp: Date.now(), hypothesisId: 'H2' }) }).catch(() => {});
+      // #endregion
       setLastSnapshot(last);
       setPersonalBest(pb);
       setBodyWeight(bw);
     });
     fetchExerciseHistory(exercise.id, 10).then(setHistoryRows);
 
-    fetchLastExerciseSessionSets(exercise.id).then((lastSets) => {
-      if (lastSets.length === 0) return;
-      const newSets: WorkoutSet[] = lastSets.map((row, i) => {
-        const set = createSetForExercise(exercise, i + 1);
-        return {
-          ...set,
-          inputWeight: row.inputWeight,
-          reps: row.reps,
-          restMin: row.restMin,
-        };
-      });
+    const draft = loadDraftFromStorage(sessionId, exercise.id);
+    if (draft?.length) {
       setBlocks((prev) => {
         const first = prev[0];
         if (!first || first.exercise.id !== exercise.id) return prev;
-        return [{ ...first, sets: newSets }, ...prev.slice(1)];
+        const draftFirst = draft[0];
+        const sets: WorkoutSet[] = draftFirst.sets.map((s, i) => ({
+          ...(first.sets[i] ?? createSetForExercise(first.exercise, i + 1)),
+          inputWeight: s.inputWeight,
+          reps: s.reps,
+          restMin: s.restMin,
+          rpe: s.rpe,
+          completed: s.completed,
+          order: s.order,
+          side: (s.side as WorkoutSet['side']) ?? 'both',
+        }));
+        return [{ ...first, sets }, ...prev.slice(1)];
       });
-    });
-  }, [exercise.id]);
+    } else {
+      fetchLastExerciseSessionSets(exercise.id).then((lastSets) => {
+        if (lastSets.length === 0) return;
+        const newSets: WorkoutSet[] = lastSets.map((row, i) => {
+          const set = createSetForExercise(exercise, i + 1);
+          return {
+            ...set,
+            inputWeight: row.inputWeight,
+            reps: row.reps,
+            restMin: row.restMin,
+          };
+        });
+        setBlocks((prev) => {
+          const first = prev[0];
+          if (!first || first.exercise.id !== exercise.id) return prev;
+          return [{ ...first, sets: newSets }, ...prev.slice(1)];
+        });
+      });
+    }
+  }, [sessionId, exercise.id]);
+
+  const hasDraftData = useMemo(() => blocks.some((b) => b.sets.some((s) => s.completed || s.inputWeight || s.reps)), [blocks]);
+
+  const saveDraftAndBack = useCallback(() => {
+    if (hasDraftData) saveDraftToStorage(sessionId, exercise.id, blocks);
+    onBack();
+  }, [hasDraftData, sessionId, exercise.id, blocks, onBack]);
+
+  useEffect(() => {
+    return () => {
+      if (hasDraftData) saveDraftToStorage(sessionId, exercise.id, blocks);
+    };
+  }, [sessionId, exercise.id, hasDraftData, blocks]);
 
   useEffect(() => {
     if (restCountdownSec <= 0) return;
@@ -311,6 +396,7 @@ export function ExerciseDetailScreen({
       alert(saveErr.message || 'Не удалось сохранить подходы. Проверьте сеть и попробуйте снова.');
       return;
     }
+    clearDraftFromStorage(sessionId, exercise.id);
     onComplete();
   };
 
@@ -330,7 +416,7 @@ export function ExerciseDetailScreen({
       {/* 1. Header: Minimal & Sticky */}
       <header className="sticky top-0 z-20 bg-black/80 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800 transition-colors flex-shrink-0">
+          <button onClick={saveDraftAndBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800 transition-colors flex-shrink-0">
             <ChevronLeft className="w-6 h-6 text-zinc-300" />
           </button>
           <div className="min-w-0 flex-1">
@@ -381,6 +467,11 @@ export function ExerciseDetailScreen({
                   block.exercise.baseWeight,
                   bodyWeight ?? undefined
                 );
+                // #region agent log
+                if (block.exercise.nameRu?.toLowerCase().includes('гравитрон') || weightType === 'assisted') {
+                  fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ExerciseDetailScreen.tsx:effectiveKg', message: 'gravitron/assisted effective calc', data: { nameRu: block.exercise.nameRu, apiWeightType: block.exercise.weightType, resolvedWeightType: weightType, bodyWeight, inputStr: set.inputWeight, baseWeight: block.exercise.baseWeight, effectiveKg }, timestamp: Date.now(), hypothesisId: 'H1,H3,H4,H5' }) }).catch(() => {});
+                }
+                // #endregion
 
                 return (
                   <div

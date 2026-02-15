@@ -3,7 +3,7 @@ import { CategoriesScreen } from './components/CategoriesScreen';
 import { ExerciseListScreen } from './components/ExerciseListScreen';
 import { ExerciseDetailScreen } from './components/ExerciseDetailScreen';
 import { AddExerciseScreen } from './components/AddExerciseScreen';
-import { HomeScreen } from './components/HomeScreen';
+import { HomeScreenBento } from './components/HomeScreenBento';
 import { AnalyticsScreen } from './components/AnalyticsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { WorkoutSummaryScreen } from './components/WorkoutSummaryScreen';
@@ -20,6 +20,7 @@ export default function App() {
   const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
   const [addFromCategoriesMode, setAddFromCategoriesMode] = useState(false);
   const [summarySessionId, setSummarySessionId] = useState<string | null>(null);
+  const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
 
@@ -38,6 +39,16 @@ export default function App() {
     setSelectedExercise(null);
   }, []);
 
+  const resumeOrOpenCategories = useCallback(() => {
+    if (lastExerciseInSession) {
+      setSelectedExercise(lastExerciseInSession.exercise);
+      setSelectedCategory(lastExerciseInSession.category);
+      setScreen('exercise-detail');
+    } else {
+      openCategories();
+    }
+  }, [lastExerciseInSession, openCategories]);
+
   const openExercises = useCallback((category: Category) => {
     setSelectedCategory(category);
     setScreen('exercises');
@@ -47,7 +58,9 @@ export default function App() {
   const openExerciseDetail = useCallback((exercise: Exercise) => {
     setSelectedExercise(exercise);
     setScreen('exercise-detail');
-  }, []);
+    const category = getCategoryBySlug(exercise.category) ?? selectedCategory ?? { slug: exercise.category, name: exercise.category };
+    setLastExerciseInSession({ exercise, category });
+  }, [selectedCategory]);
 
   const openAddExercise = useCallback(() => {
     setScreen('add-exercise');
@@ -108,7 +121,10 @@ export default function App() {
         exercise={selectedExercise}
         sessionId={sessionId}
         onBack={() => setScreen('exercises')}
-        onComplete={() => setScreen('exercises')}
+        onComplete={() => {
+          setLastExerciseInSession(null);
+          setScreen('exercises');
+        }}
         onEditExercise={handleEditExercise}
         onDeleteExercise={handleDeleteExercise}
       />
@@ -164,8 +180,8 @@ export default function App() {
 
   if (screen === 'home') {
     return (
-      <HomeScreen
-        onOpenExercises={openCategories}
+      <HomeScreenBento
+        onOpenExercises={resumeOrOpenCategories}
         onOpenAnalytics={() => setScreen('analytics')}
         onOpenHistory={() => setScreen('history')}
         onSessionStarted={(id) => {
@@ -174,6 +190,7 @@ export default function App() {
         }}
         onWorkoutFinished={(id) => {
           setSummarySessionId(id);
+          setLastExerciseInSession(null);
           setScreen('summary');
         }}
       />
