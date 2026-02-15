@@ -63,7 +63,8 @@ export function calcEffectiveLoadKg(params: {
 }): number {
   const type = params.type;
   const inputWt = toNumber(params.inputWt);
-  const bodyWt = toNumber(params.bodyWt, 0);
+  // Если в базе записан вес — берём его. Если нет (старая запись) — 90 кг, чтобы график не падал в ноль.
+  const bodyWt = toNumber(params.bodyWt, 90);
   const baseWt = toNumber(params.baseWt, 0);
   const multiplier = toNumber(params.multiplier, 1);
 
@@ -71,7 +72,7 @@ export function calcEffectiveLoadKg(params: {
   if (type === 'dumbbell') return inputWt + baseWt;
   if (type === 'machine') return inputWt + baseWt;
   if (type === 'bodyweight') return bodyWt + inputWt + baseWt;
-  // assisted трактуем как помощь: вычитаем из веса тела
+  // assisted: (вес тела) − (противовес). Без дефолта bodyWt старые записи давали бы 0.
   return Math.max(0, bodyWt - (inputWt + baseWt));
 }
 
