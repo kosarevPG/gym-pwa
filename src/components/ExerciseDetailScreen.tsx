@@ -189,7 +189,10 @@ export function ExerciseDetailScreen({
       setPersonalBest(pb);
       setBodyWeight(bw);
     });
-    fetchExerciseHistory(exercise.id, 10).then(setHistoryRows);
+    fetchExerciseHistory(exercise.id, 10, {
+      bodyweightType: exercise.bodyweightType,
+      baseWeight: exercise.baseWeight,
+    }).then(setHistoryRows);
 
     const draft = loadDraftFromStorage(sessionId, exercise.id);
     if (draft?.length) {

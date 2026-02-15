@@ -411,8 +411,17 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
   }));
 }
 
-export async function fetchExerciseHistory(exerciseId: string, limit = 30): Promise<ExerciseHistoryRow[]> {
-  const v2Select = 'id, created_at, weight, reps, rpe, rest_seconds, one_rm, volume, effective_load';
+export interface FetchExerciseHistoryOptions {
+  bodyweightType?: BodyweightType;
+  baseWeight?: number;
+}
+
+export async function fetchExerciseHistory(
+  exerciseId: string,
+  limit = 30,
+  options?: FetchExerciseHistoryOptions
+): Promise<ExerciseHistoryRow[]> {
+  const v2Select = 'id, created_at, weight, reps, rpe, rest_seconds, one_rm, volume, effective_load, input_wt, body_wt_snapshot';
   const legacySelect = 'id, created_at, weight, reps';
 
   const v2 = await supabase
@@ -441,10 +450,24 @@ export async function fetchExerciseHistory(exerciseId: string, limit = 30): Prom
     }));
   }
 
+  const { bodyweightType, baseWeight } = options ?? {};
+
   return (v2.data ?? []).map((row: any) => {
-    const effective = row.effective_load != null ? Number(row.effective_load) : null;
+    const effectiveFromDb = row.effective_load != null ? Number(row.effective_load) : null;
+    const inputWt = row.input_wt != null ? Number(row.input_wt) : null;
+    const bodyWt = row.body_wt_snapshot != null ? Number(row.body_wt_snapshot) : null;
     const weightCol = row.weight != null ? Number(row.weight) : null;
-    const displayWeight = effective ?? weightCol ?? 0;
+
+    let displayWeight: number;
+    if (effectiveFromDb != null) {
+      displayWeight = effectiveFromDb;
+    } else if (bodyweightType === 'ASSISTED' && inputWt != null && inputWt > 0) {
+      const bw = bodyWt ?? baseWeight ?? null;
+      displayWeight = bw != null ? Math.max(0, bw - inputWt) : weightCol ?? 0;
+    } else {
+      displayWeight = weightCol ?? 0;
+    }
+
     return {
       id: String(row.id),
       createdAt: String(row.created_at),
