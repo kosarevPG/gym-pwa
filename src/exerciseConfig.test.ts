@@ -23,17 +23,36 @@ describe('allows1rm', () => {
 describe('WEIGHT_FORMULAS', () => {
   it('barbell toEffective: input * mult + base', () => {
     expect(WEIGHT_FORMULAS.barbell.toEffective(20, undefined, 20, 2)).toBe(60);
+    expect(WEIGHT_FORMULAS.barbell.toEffective(0, undefined, 20, 2)).toBe(20);
   });
   it('barbell toInput inverts toEffective', () => {
     const effective = 60;
     const input = WEIGHT_FORMULAS.barbell.toInput?.(effective, undefined, 20, 2);
     expect(input).toBe(20);
   });
+  it('plate_loaded toEffective: input * mult + base', () => {
+    expect(WEIGHT_FORMULAS.plate_loaded.toEffective(10, undefined, 50, 2)).toBe(70);
+  });
+  it('dumbbell toEffective: mult 1 = одна гантель, mult 2 = две (x2)', () => {
+    expect(WEIGHT_FORMULAS.dumbbell.toEffective(12.5, undefined, 0, 1)).toBe(12.5);
+    expect(WEIGHT_FORMULAS.dumbbell.toEffective(12.5, undefined, 0, 2)).toBe(25);
+    expect(WEIGHT_FORMULAS.dumbbell.toEffective(10, undefined, 0, 2)).toBe(20);
+  });
+  it('machine toEffective: input + base', () => {
+    expect(WEIGHT_FORMULAS.machine.toEffective(50, undefined, 0)).toBe(50);
+    expect(WEIGHT_FORMULAS.machine.toEffective(30, undefined, 10)).toBe(40);
+  });
+  it('standard toEffective: input + base', () => {
+    expect(WEIGHT_FORMULAS.standard.toEffective(40, undefined, 0)).toBe(40);
+  });
   it('bodyweight toEffective: bw + input + base', () => {
     expect(WEIGHT_FORMULAS.bodyweight.toEffective(5, 80, 0)).toBe(85);
+    expect(WEIGHT_FORMULAS.bodyweight.toEffective(0, 90, 0)).toBe(90);
   });
   it('assisted toEffective: max(0, bw - input - base)', () => {
     expect(WEIGHT_FORMULAS.assisted.toEffective(20, 80, 0)).toBe(60);
+    expect(WEIGHT_FORMULAS.assisted.toEffective(40, 91, 0)).toBe(51);
+    expect(WEIGHT_FORMULAS.assisted.toEffective(100, 91, 0)).toBe(0);
   });
 });
 

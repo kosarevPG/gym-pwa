@@ -28,13 +28,29 @@ describe('calcSideMult', () => {
 describe('calcEffectiveLoadKg', () => {
   it('barbell: inputWt * multiplier + baseWt', () => {
     expect(calcEffectiveLoadKg({ type: 'barbell', inputWt: 20, baseWt: 20, multiplier: 2 })).toBe(60);
+    expect(calcEffectiveLoadKg({ type: 'barbell', inputWt: 0, baseWt: 20, multiplier: 2 })).toBe(20);
   });
-  it('dumbbell/bodyweight/assisted use bodyWt when needed', () => {
+  it('dumbbell: one hand mult 1, two hands (x2) mult 2', () => {
+    expect(calcEffectiveLoadKg({ type: 'dumbbell', inputWt: 12.5, baseWt: 0, multiplier: 1 })).toBe(12.5);
+    expect(calcEffectiveLoadKg({ type: 'dumbbell', inputWt: 12.5, baseWt: 0, multiplier: 2 })).toBe(25);
+    expect(calcEffectiveLoadKg({ type: 'dumbbell', inputWt: 10, baseWt: 0, multiplier: 2 })).toBe(20);
+  });
+  it('machine: input + base', () => {
+    expect(calcEffectiveLoadKg({ type: 'machine', inputWt: 50, baseWt: 0 })).toBe(50);
+    expect(calcEffectiveLoadKg({ type: 'machine', inputWt: 30, baseWt: 10 })).toBe(40);
+  });
+  it('standard: input + base', () => {
+    expect(calcEffectiveLoadKg({ type: 'standard', inputWt: 40, baseWt: 0 })).toBe(40);
+  });
+  it('bodyweight/assisted use bodyWt when needed', () => {
     expect(calcEffectiveLoadKg({ type: 'bodyweight', inputWt: 10, bodyWt: 80, baseWt: 0 })).toBe(90);
     expect(calcEffectiveLoadKg({ type: 'assisted', inputWt: 20, bodyWt: 80, baseWt: 0 })).toBe(60);
   });
   it('assisted does not go below 0', () => {
     expect(calcEffectiveLoadKg({ type: 'assisted', inputWt: 100, bodyWt: 80 })).toBe(0);
+  });
+  it('assisted uses bodyWt default 90 when null', () => {
+    expect(calcEffectiveLoadKg({ type: 'assisted', inputWt: 40, bodyWt: null, baseWt: 0 })).toBe(50);
   });
 });
 

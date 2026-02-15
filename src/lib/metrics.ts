@@ -69,9 +69,10 @@ export function calcEffectiveLoadKg(params: {
   const multiplier = toNumber(params.multiplier, 1);
 
   if (type === 'barbell') return inputWt * multiplier + baseWt;
-  if (type === 'dumbbell') return inputWt + baseWt;
+  if (type === 'dumbbell') return inputWt * multiplier + baseWt;
   if (type === 'machine') return inputWt + baseWt;
   if (type === 'bodyweight') return bodyWt + inputWt + baseWt;
+  if (type === 'standard') return inputWt + baseWt;
   // assisted: (вес тела) − (противовес). Без дефолта bodyWt старые записи давали бы 0.
   return Math.max(0, bodyWt - (inputWt + baseWt));
 }
