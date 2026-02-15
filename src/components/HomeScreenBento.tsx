@@ -293,40 +293,38 @@ export function HomeScreenBento({
           </button>
         </div>
 
-        <div className="flex justify-center">
-          <div className="flex gap-0.5 sm:gap-1">
-            {weekDays.map((item) => {
-              const isToday = item.status === 'today';
-              const isDone = item.status === 'done';
-              return (
-                <button
-                  key={item.dateStr}
-                  type="button"
-                  onClick={() => setDaySheetDate(item.dateStr)}
-                  className="flex flex-col items-center gap-1 cursor-pointer group min-w-0"
+        <div className="max-w-lg mx-auto flex gap-1">
+          {weekDays.map((item) => {
+            const isToday = item.status === 'today';
+            const isDone = item.status === 'done';
+            return (
+              <button
+                key={item.dateStr}
+                type="button"
+                onClick={() => setDaySheetDate(item.dateStr)}
+                className="flex flex-col items-center gap-1.5 flex-1 min-w-0 cursor-pointer group"
+              >
+                <span
+                  className={`text-[10px] font-medium uppercase tracking-wide ${isToday ? 'text-blue-400' : 'text-zinc-500 group-hover:text-zinc-300'}`}
                 >
-                  <span
-                    className={`text-[10px] font-medium uppercase tracking-wide shrink-0 ${isToday ? 'text-blue-400' : 'text-zinc-500 group-hover:text-zinc-300'}`}
-                  >
-                    {item.day}
-                  </span>
-                  <div
-                    className={`
-                      w-9 h-11 sm:w-10 sm:h-12 rounded-xl flex items-center justify-center text-sm font-semibold transition-all relative shrink-0
-                      ${isToday
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50 scale-105'
-                        : 'bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:border-zinc-700'}
-                    `}
-                  >
-                    {item.date}
-                    {isDone && (
-                      <div className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-emerald-400 ring-2 ring-zinc-950" />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  {item.day}
+                </span>
+                <div
+                  className={`
+                    w-full max-w-12 h-12 rounded-xl flex items-center justify-center text-sm font-semibold transition-all relative
+                    ${isToday
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50 scale-105'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-400 group-hover:border-zinc-700'}
+                  `}
+                >
+                  {item.date}
+                  {isDone && (
+                    <div className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-emerald-400 ring-2 ring-zinc-950" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </header>
 
