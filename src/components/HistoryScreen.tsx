@@ -395,22 +395,15 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
                                 const inputKg = row.input_wt ?? 0;
                                 const effectiveKg = row.effective_load ?? row.input_wt ?? 0;
                                 const rest = restMin(row.rest_s);
-                                const showBoth = row.effective_load != null && Math.abs((row.effective_load ?? 0) - inputKg) > 0.01;
                                 return (
                                   <div
                                     key={row.id}
                                     className="flex justify-between items-baseline text-sm text-zinc-300 gap-2"
                                   >
                                     <span className="min-w-0">
-                                      {showBoth ? (
-                                        <>
-                                          <span className="text-zinc-400">{formatEffectiveKg(inputKg)} кг (ввод)</span>
-                                          <span className="text-zinc-500 mx-1">→</span>
-                                          <span>{formatEffectiveKg(effectiveKg)} кг (эфф.)</span>
-                                        </>
-                                      ) : (
-                                        formatEffectiveKg(effectiveKg) + ' кг'
-                                      )}
+                                      <span className="text-zinc-400">{formatEffectiveKg(inputKg)} кг (ввод)</span>
+                                      <span className="text-zinc-500 mx-1">→</span>
+                                      <span>{formatEffectiveKg(effectiveKg)} кг (эфф.)</span>
                                       {' × '}{row.reps} повторений
                                     </span>
                                     <span className="text-zinc-500 flex-shrink-0">отдых {rest}</span>

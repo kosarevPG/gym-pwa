@@ -722,7 +722,6 @@ function SetRowEdit({
 
   const inputKg = row.input_wt ?? 0;
   const effectiveKg = row.effective_load ?? row.input_wt ?? 0;
-  const showBoth = row.effective_load != null && Math.abs((row.effective_load ?? 0) - inputKg) > 0.01;
   const formatKg = (n: number) => (n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1));
 
   return (
@@ -731,15 +730,9 @@ function SetRowEdit({
       onClick={onStartEdit}
     >
       <span>
-        {showBoth ? (
-          <>
-            <span className="text-zinc-400">{formatKg(inputKg)} кг (ввод)</span>
-            <span className="text-zinc-500 mx-1">→</span>
-            <span>{formatKg(effectiveKg)} кг (эфф.)</span>
-          </>
-        ) : (
-          formatKg(effectiveKg) + ' кг'
-        )}
+        <span className="text-zinc-400">{formatKg(inputKg)} кг (ввод)</span>
+        <span className="text-zinc-500 mx-1">→</span>
+        <span>{formatKg(effectiveKg)} кг (эфф.)</span>
         {' × '}{row.reps} повторений
         <span className="text-zinc-500 ml-2">отдых {restSecToMin(row.rest_s)}м</span>
       </span>
