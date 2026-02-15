@@ -462,8 +462,8 @@ export async function fetchExerciseHistory(
     if (effectiveFromDb != null) {
       displayWeight = effectiveFromDb;
     } else if (bodyweightType === 'ASSISTED' && inputWt != null && inputWt > 0) {
-      const bw = bodyWt ?? baseWeight ?? null;
-      displayWeight = bw != null ? Math.max(0, bw - inputWt) : weightCol ?? 0;
+      const bw = bodyWt ?? baseWeight ?? 80;
+      displayWeight = Math.max(0, bw - inputWt);
     } else {
       displayWeight = weightCol ?? 0;
     }
