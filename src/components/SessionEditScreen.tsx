@@ -126,6 +126,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     const payload: Parameters<typeof updateTrainingLog>[1] = {
       ...patch,
       weight: effective,
+      effective_load: effective,
       set_volume: effective * Math.max(0, repsNum),
     };
     const { error } = await updateTrainingLog(id, payload);
@@ -178,6 +179,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
         set_no: maxSetNo,
         exercise_order: exerciseOrder,
         input_wt: 0,
+        effective_load: 0,
         rest_seconds: 0,
         completed_at: firstTs,
       },
@@ -243,6 +245,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
         order_index: 0,
         exercise_order: maxOrder,
         input_wt: 0,
+        effective_load: 0,
         rest_seconds: 0,
         completed_at: firstTs,
       },

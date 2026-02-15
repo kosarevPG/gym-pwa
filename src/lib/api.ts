@@ -1209,23 +1209,27 @@ export async function importWorkoutData(
   const batchSize = 100;
   for (let i = 0; i < logsToImport.length; i += batchSize) {
     const chunk = logsToImport.slice(i, i + batchSize);
-    const rows: SaveTrainingLogRow[] = chunk.map((r) => ({
-      session_id: sessionIdMap.get(r.session_id)!,
-      set_group_id: r.set_group_id,
-      exercise_id: r.exercise_id,
-      weight: r.effective_load != null ? r.effective_load : r.input_wt,
-      reps: r.reps,
-      order_index: r.set_no,
-      exercise_order: r.exercise_order ?? 0,
-      input_wt: r.input_wt,
-      side: r.side,
-      body_wt_snapshot: r.body_wt_snapshot ?? undefined,
-      side_mult: r.side_mult ?? undefined,
-      set_volume: r.set_volume ?? undefined,
-      rpe: r.rpe || undefined,
-      rest_seconds: r.rest_s || undefined,
-      completed_at: r.ts,
-    }));
+    const rows: SaveTrainingLogRow[] = chunk.map((r) => {
+      const effective = r.effective_load != null ? r.effective_load : r.input_wt;
+      return {
+        session_id: sessionIdMap.get(r.session_id)!,
+        set_group_id: r.set_group_id,
+        exercise_id: r.exercise_id,
+        weight: effective,
+        reps: r.reps,
+        order_index: r.set_no,
+        exercise_order: r.exercise_order ?? 0,
+        input_wt: r.input_wt,
+        effective_load: effective,
+        side: r.side,
+        body_wt_snapshot: r.body_wt_snapshot ?? undefined,
+        side_mult: r.side_mult ?? undefined,
+        set_volume: r.set_volume ?? undefined,
+        rpe: r.rpe || undefined,
+        rest_seconds: r.rest_s || undefined,
+        completed_at: r.ts,
+      };
+    });
     const { error } = await saveTrainingLogs(rows);
     if (error) {
       return { success: false, error: `Ошибка сохранения логов: ${error.message}` };

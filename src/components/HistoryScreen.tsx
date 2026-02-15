@@ -36,6 +36,10 @@ function formatDate(ts: string): string {
   return `${y}.${m}.${day}`;
 }
 
+function formatEffectiveKg(kg: number): string {
+  return kg % 1 === 0 ? String(Math.round(kg)) : kg.toFixed(1);
+}
+
 /** Одна сессия (session_id) = одна тренировка. Группируем по session_id для возможности изменить дату. */
 function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGroup[] {
   const bySession = new Map<string, TrainingLogRaw[]>();
@@ -396,7 +400,7 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
                                     className="flex justify-between items-baseline text-sm text-zinc-300 gap-2"
                                   >
                                     <span className="min-w-0">
-                                      {kg} кг × {row.reps} повторений
+                                      {formatEffectiveKg(kg)} кг × {row.reps} повторений
                                     </span>
                                     <span className="text-zinc-500 flex-shrink-0">отдых {rest}</span>
                                   </div>
