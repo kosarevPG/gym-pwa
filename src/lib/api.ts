@@ -441,17 +441,22 @@ export async function fetchExerciseHistory(exerciseId: string, limit = 30): Prom
     }));
   }
 
-  return (v2.data ?? []).map((row) => ({
-    id: String(row.id),
-    createdAt: String(row.created_at),
-    weight: Number(row.weight ?? 0),
-    reps: Number(row.reps ?? 0),
-    rpe: row.rpe != null ? Number(row.rpe) : undefined,
-    restSeconds: row.rest_seconds != null ? Number(row.rest_seconds) : undefined,
-    oneRm: row.one_rm != null ? Number(row.one_rm) : undefined,
-    volume: row.volume != null ? Number(row.volume) : undefined,
-    effectiveLoad: row.effective_load != null ? Number(row.effective_load) : undefined,
-  }));
+  return (v2.data ?? []).map((row: any) => {
+    const effective = row.effective_load != null ? Number(row.effective_load) : null;
+    const weightCol = row.weight != null ? Number(row.weight) : null;
+    const displayWeight = effective ?? weightCol ?? 0;
+    return {
+      id: String(row.id),
+      createdAt: String(row.created_at),
+      weight: displayWeight,
+      reps: Number(row.reps ?? 0),
+      rpe: row.rpe != null ? Number(row.rpe) : undefined,
+      restSeconds: row.rest_seconds != null ? Number(row.rest_seconds) : undefined,
+      oneRm: row.one_rm != null ? Number(row.one_rm) : undefined,
+      volume: row.volume != null ? Number(row.volume) : undefined,
+      effectiveLoad: displayWeight,
+    };
+  });
 }
 
 /** «Last» — последний подход последней по дате сессии. weight = input_wt (то, что вводил пользователь). */
