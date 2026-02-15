@@ -778,19 +778,22 @@ export function ExerciseDetailScreen({
                 <div key={dateStr} className="mb-4">
                   <div className="text-sm font-semibold text-zinc-400 mb-2 px-1">{dateStr}</div>
                   <div className="rounded-xl border border-zinc-800 bg-zinc-900 overflow-hidden">
-                    {(byDate.get(dateStr) ?? []).map((row) => (
-                      <div
-                        key={row.id}
-                        className="px-3 py-2.5 border-b border-zinc-800/50 last:border-b-0 flex items-center justify-between gap-2"
-                      >
-                        <span className="font-medium text-white">
-                          {row.weight} кг × {row.reps}
-                        </span>
-                        <span className="text-zinc-500 text-sm">
-                          отдых {formatRest(row.restSeconds)}
-                        </span>
-                      </div>
-                    ))}
+                    {(byDate.get(dateStr) ?? []).map((row) => {
+                      const effective = row.effectiveLoad ?? (row as { effective_load?: number }).effective_load ?? row.weight;
+                      return (
+                        <div
+                          key={row.id}
+                          className="px-3 py-2.5 border-b border-zinc-800/50 last:border-b-0 flex items-center justify-between gap-2"
+                        >
+                          <span className="font-medium text-white">
+                            {formatEffectiveKg(effective)} кг × {row.reps}
+                          </span>
+                          <span className="text-zinc-500 text-sm">
+                            отдых {formatRest(row.restSeconds)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
