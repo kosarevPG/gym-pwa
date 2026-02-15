@@ -33,16 +33,27 @@ function getWeightType(ex: ExerciseType): WeightInputType {
 
 /**
  * Рассчитывает итоговую эффективную нагрузку.
- * Принимает userBodyWeight для корректного расчета bodyweight/assisted упражнений.
+ * Принимает userBodyWeight для bodyweight/assisted; weightMultiplier для гантелей (x2 при simultaneous).
  */
-function calcTotalKg(inputStr: string, weightType: WeightInputType, baseWeight?: number, userBodyWeight?: number): number | null {
+function calcTotalKg(
+  inputStr: string,
+  weightType: WeightInputType,
+  baseWeight?: number,
+  userBodyWeight?: number,
+  weightMultiplier?: number
+): number | null {
   const input = parseFloat(inputStr);
   if (inputStr === '' || isNaN(input)) return null;
   const formula = WEIGHT_FORMULAS[weightType];
   const base = baseWeight ?? (weightType === 'barbell' ? 20 : 0);
-  // Для штанги и plate_loaded множитель 2 (два конца грифа/рычага), для остальных 1
-  const mult = weightType === 'barbell' || weightType === 'plate_loaded' ? 2 : 1;
+  const mult =
+    weightMultiplier ??
+    (weightType === 'barbell' || weightType === 'plate_loaded' ? 2 : 1);
   return formula.toEffective(input, userBodyWeight, base, mult);
+}
+
+function formatEffectiveKg(kg: number): string {
+  return kg % 1 === 0 ? String(Math.round(kg)) : kg.toFixed(1);
 }
 
 export interface ExerciseBlock {
@@ -358,8 +369,8 @@ export function ExerciseDetailScreen({
         const s = block.sets[round - 1];
         if (!s || (!s.completed && !s.inputWeight && !s.reps)) continue;
         const wtType = getWeightType(block.exercise);
-        // Передаем bodyWeight для корректного расчета Effective Load в логах
-        const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight, bodyWeight ?? undefined) ?? 0;
+        const logWeightMult = wtType === 'dumbbell' && block.exercise.simultaneous ? 2 : undefined;
+        const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight, bodyWeight ?? undefined, logWeightMult) ?? 0;
         const rps = parseInt(s.reps) || 0;
         let completedAt: string;
         if (backdatedStartedAt) {
@@ -460,12 +471,15 @@ export function ExerciseDetailScreen({
                   swipeState?.setId === set.id ? swipeState.offset : revealedDeleteSetId === set.id ? -80 : 0;
                 const canSwipeDelete = block.sets.length > 1;
 
-                // Расчет эффективной нагрузки для отображения
+                // Расчет эффективной нагрузки для отображения (гантели x2 при simultaneous)
+                const weightMult =
+                  weightType === 'dumbbell' && block.exercise.simultaneous ? 2 : undefined;
                 const effectiveKg = calcTotalKg(
                   set.inputWeight,
                   weightType,
                   block.exercise.baseWeight,
-                  bodyWeight ?? undefined
+                  bodyWeight ?? undefined,
+                  weightMult
                 );
                 // #region agent log
                 if (block.exercise.nameRu?.toLowerCase().includes('гравитрон') || weightType === 'assisted') {
@@ -531,7 +545,7 @@ export function ExerciseDetailScreen({
                               </div>
                               {effectiveKg !== null && !isNaN(effectiveKg) && (
                                 <div className="text-[10px] text-zinc-500 text-center mt-0.5 font-mono leading-none shrink-0">
-                                  ≈{Math.round(effectiveKg)} кг
+                                  ≈{formatEffectiveKg(effectiveKg)} кг
                                 </div>
                               )}
                             </div>
