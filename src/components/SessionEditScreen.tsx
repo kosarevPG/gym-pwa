@@ -105,7 +105,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
 
   const handleUpdateSet = async (
     id: string,
-    patch: { input_wt?: number; reps?: number; rest_seconds?: number }
+    patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }
   ) => {
     const row = rows.find((r) => r.id === id);
     const ex = row ? exerciseMap.get(row.exercise_id) : null;
@@ -114,15 +114,17 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     const type = ex?.weightType ?? 'standard';
     const multiplier = ex?.simultaneous ? 2 : 1;
     const effective =
-      ex != null
-        ? calcEffectiveLoadKg({
-            type,
-            inputWt,
-            bodyWt: row?.body_wt_snapshot ?? null,
-            baseWt: ex.baseWeight ?? 0,
-            multiplier,
-          })
-        : inputWt;
+      patch.effective_load !== undefined
+        ? patch.effective_load
+        : ex != null
+          ? calcEffectiveLoadKg({
+              type,
+              inputWt,
+              bodyWt: row?.body_wt_snapshot ?? null,
+              baseWt: ex.baseWeight ?? 0,
+              multiplier,
+            })
+          : inputWt;
     const payload: Parameters<typeof updateTrainingLog>[1] = {
       ...patch,
       weight: effective,
@@ -143,6 +145,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
         return {
           ...r,
           ...(patch.input_wt !== undefined && { input_wt: patch.input_wt }),
+          ...(patch.effective_load !== undefined && { effective_load: patch.effective_load }),
           ...(patch.reps !== undefined && { reps: patch.reps }),
           ...(patch.rest_seconds !== undefined && { rest_s: patch.rest_seconds }),
           effective_load: effective,
@@ -509,7 +512,7 @@ interface ExerciseBlockProps {
   sets: TrainingLogRaw[];
   exerciseMap: Map<string, Exercise>;
   sessionId: string;
-  onUpdateSet: (id: string, patch: { input_wt?: number; reps?: number; rest_seconds?: number }) => void;
+  onUpdateSet: (id: string, patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
   onDeleteSet: (id: string) => void;
   onAddSet: (exerciseId: string, setGroupId: string, exerciseOrder: number) => void;
   onDeleteExercise: (exerciseId: string) => void;
@@ -631,7 +634,7 @@ interface SetRowEditProps {
   isEditing: boolean;
   onStartEdit: () => void;
   onBlur: () => void;
-  onUpdate: (patch: { input_wt?: number; reps?: number; rest_seconds?: number }) => void;
+  onUpdate: (patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -648,16 +651,38 @@ function SetRowEdit({
   onMoveUp,
   onMoveDown,
 }: SetRowEditProps) {
+  const effectiveFromRow = row.effective_load ?? row.input_wt ?? 0;
   const [weight, setWeight] = useState(String(row.input_wt));
+  const [effective, setEffective] = useState(String(effectiveFromRow));
   const [reps, setReps] = useState(String(row.reps));
   const [rest, setRest] = useState(restSecToMin(row.rest_s));
 
+  useEffect(() => {
+    if (isEditing) {
+      setWeight(String(row.input_wt));
+      setEffective(String(row.effective_load ?? row.input_wt ?? 0));
+      setReps(String(row.reps));
+      setRest(restSecToMin(row.rest_s));
+    }
+  }, [isEditing, row.id, row.input_wt, row.effective_load, row.reps, row.rest_s]);
+
   const flush = () => {
     const inputWt = parseFloat(weight.replace(',', '.')) || 0;
+    const effectiveWt = parseFloat(effective.replace(',', '.')) ?? effectiveFromRow;
     const repsNum = Math.floor(parseFloat(reps) || 0);
     const restSec = parseRestMin(rest);
-    if (inputWt !== row.input_wt || repsNum !== row.reps || restSec !== row.rest_s) {
-      onUpdate({ input_wt: inputWt, reps: repsNum, rest_seconds: restSec });
+    const changed =
+      inputWt !== row.input_wt ||
+      effectiveWt !== effectiveFromRow ||
+      repsNum !== row.reps ||
+      restSec !== row.rest_s;
+    if (changed) {
+      onUpdate({
+        input_wt: inputWt,
+        effective_load: Number.isFinite(effectiveWt) ? effectiveWt : inputWt,
+        reps: repsNum,
+        rest_seconds: restSec,
+      });
     }
   };
 
@@ -671,8 +696,21 @@ function SetRowEdit({
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
           onBlur={flush}
-          className="w-16 px-2 py-1 rounded bg-zinc-800 border border-zinc-600 text-white text-right"
-          placeholder="кг"
+          className="w-14 px-2 py-1 rounded bg-zinc-800 border border-zinc-600 text-white text-right"
+          placeholder="ввод"
+          title="Ввод (кг)"
+        />
+        <span className="text-zinc-500">→</span>
+        <input
+          type="number"
+          min={0}
+          step={0.5}
+          value={effective}
+          onChange={(e) => setEffective(e.target.value)}
+          onBlur={flush}
+          className="w-14 px-2 py-1 rounded bg-zinc-800 border border-zinc-600 text-white text-right"
+          placeholder="эфф."
+          title="Эффективный (кг)"
         />
         <span className="text-zinc-500">×</span>
         <input
