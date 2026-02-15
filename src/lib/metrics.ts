@@ -139,10 +139,29 @@ export function markWarmupSets(rows: TrainingMetricRow[]): Array<TrainingMetricR
         reps: row.reps,
         sideMult,
       });
-      const isWarmup = row.rpe <= 6 || derivedEffective < 0.6 * maxEffectiveToday;
+      const isWarmup =
+        (row.rpe != null && row.rpe > 0 && row.rpe <= 6) || derivedEffective < 0.6 * maxEffectiveToday;
       out.push({ ...row, isWarmup, derivedEffective, derivedVolume });
     });
   });
+
+  // #region agent log
+  if (typeof fetch !== 'undefined' && rows.length > 0) {
+    const warmupByRpe = out.filter((r) => r.rpe <= 6).length;
+    const nonWarmup = out.filter((r) => !r.isWarmup).length;
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'metrics.ts:markWarmupSets',
+        message: 'warmup filter',
+        data: { rowsIn: rows.length, warmupByRpe, nonWarmup, sampleRpe: rows.slice(0, 3).map((r) => r.rpe) },
+        timestamp: Date.now(),
+        hypothesisId: 'H5',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   return out;
 }
@@ -241,7 +260,22 @@ export function computeExerciseBaseline(
   const ramp = computeRampStatus(rows);
   const excludeSessions = ramp.active ? Math.min(2, ramp.sessionsSinceGap) : 0;
   const selectedSessionIds = sessionIdsDesc.slice(excludeSessions, excludeSessions + 9);
-  if (selectedSessionIds.length < 6) {
+  // #region agent log
+  if (typeof fetch !== 'undefined') {
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'metrics.ts:computeExerciseBaseline',
+        message: 'baseline gate',
+        data: { rowsIn: rows.length, markedLen: marked.length, sessionCount: selectedSessionIds.length, excludeSessions },
+        timestamp: Date.now(),
+        hypothesisId: 'H2,H5',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+  if (selectedSessionIds.length < 3) {
     return {
       baselineVolumePerSet: null,
       baselineWeeklyVolume: null,

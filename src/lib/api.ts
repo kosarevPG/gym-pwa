@@ -100,6 +100,8 @@ export interface TrainingLogRaw {
   /** Группа подходов (один «Завершить» / суперсет) */
   set_group_id: string;
   exercise_id: string;
+  /** Порядок упражнения в тренировке (0, 1, 2, …) */
+  exercise_order: number;
   set_no: number;
   reps: number;
   input_wt: number;
@@ -121,6 +123,8 @@ export interface SaveTrainingLogRow {
   weight: number;
   reps: number;
   order_index: number;
+  /** Порядок упражнения в тренировке (0, 1, 2, …) */
+  exercise_order?: number;
   input_wt?: number;
   side?: SetSide;
   body_wt_snapshot?: number | null;
@@ -278,6 +282,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     'session_id',
     'set_group_id',
     'exercise_id',
+    'exercise_order',
     'order_index',
     'reps',
     'weight',
@@ -298,6 +303,38 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     .order('created_at', { ascending: false })
     .limit(5000);
 
+  // #region agent log
+  if (typeof fetch !== 'undefined' && !v2.error) {
+    const raw = (v2.data ?? []) as Array<{ completed_at?: string; created_at?: string }>;
+    const first = raw[0];
+    const last = raw[raw.length - 1];
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'api.ts:fetchTrainingLogsWindow',
+        message: 'v2 logs loaded',
+        data: { logsCount: raw.length, firstTs: first?.completed_at ?? first?.created_at, lastTs: last?.completed_at ?? last?.created_at, sinceIso },
+        timestamp: Date.now(),
+        hypothesisId: 'H1,H5',
+      }),
+    }).catch(() => {});
+  }
+  if (typeof fetch !== 'undefined' && v2.error) {
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'api.ts:fetchTrainingLogsWindow',
+        message: 'v2 error fallback to legacy',
+        data: { error: v2.error?.message, sinceIso },
+        timestamp: Date.now(),
+        hypothesisId: 'H1',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
   if (v2.error) {
     const legacy = await supabase
       .from(TRAINING_LOGS_TABLE)
@@ -309,12 +346,13 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
       console.error('fetchTrainingLogsWindow error:', legacy.error);
       return [];
     }
-    return (legacy.data ?? []).map((r) => ({
+    const legacyOut = (legacy.data ?? []).map((r) => ({
       id: String(r.id),
       ts: String(r.created_at),
       session_id: String((r as { session_id?: string }).session_id ?? r.set_group_id),
       set_group_id: String(r.set_group_id),
       exercise_id: String(r.exercise_id),
+      exercise_order: 0,
       set_no: Number(r.order_index ?? 0),
       reps: Number(r.reps ?? 0),
       input_wt: Number(r.weight ?? 0),
@@ -326,6 +364,24 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
       side_mult: 1,
       set_volume: Number(r.weight ?? 0) * Number(r.reps ?? 0),
     }));
+    // #region agent log
+    if (typeof fetch !== 'undefined' && legacyOut.length > 0) {
+      const first = legacyOut[0];
+      const last = legacyOut[legacyOut.length - 1];
+      fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'api.ts:fetchTrainingLogsWindow',
+          message: 'legacy path',
+          data: { logsCount: legacyOut.length, firstTs: first?.ts, lastTs: last?.ts, usedLegacy: true },
+          timestamp: Date.now(),
+          hypothesisId: 'H1,H5',
+        }),
+      }).catch(() => {});
+    }
+    // #endregion
+    return legacyOut;
   }
 
   return (v2.data ?? []).map((r) => ({
@@ -334,6 +390,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     session_id: String((r as { session_id?: string }).session_id ?? r.set_group_id),
     set_group_id: String(r.set_group_id),
     exercise_id: String(r.exercise_id),
+    exercise_order: Number((r as { exercise_order?: number }).exercise_order ?? 0),
     set_no: Number(r.order_index ?? 0),
     reps: Number(r.reps ?? 0),
     input_wt: Number(r.input_wt ?? r.weight ?? 0),
@@ -648,6 +705,7 @@ export async function saveTrainingLogs(
     weight: Number(r.weight),
     reps: Math.floor(Number(r.reps)) || 0,
     order_index: Math.floor(Number(r.order_index)) || 0,
+    exercise_order: r.exercise_order != null ? Math.floor(Number(r.exercise_order)) : 0,
     input_wt: r.input_wt != null ? Number(r.input_wt) : Number(r.weight),
     side: (r.side ?? 'both').toUpperCase(),
     body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
@@ -983,6 +1041,7 @@ export async function importWorkoutData(
       weight: r.input_wt,
       reps: r.reps,
       order_index: r.set_no,
+      exercise_order: r.exercise_order ?? 0,
       input_wt: r.input_wt,
       side: r.side,
       body_wt_snapshot: r.body_wt_snapshot ?? undefined,

@@ -46,7 +46,7 @@ function getMultiplierFromExercise(exercise: Exercise): number {
 
 export function buildTrainingMetricRows(logs: TrainingLogRaw[], exercises: Exercise[]): TrainingMetricRow[] {
   const map = new Map(exercises.map((e) => [e.id, e]));
-  return logs
+  const result = logs
     .map<TrainingMetricRow | null>((log) => {
       const ex = map.get(log.exercise_id);
       if (!ex) return null;
@@ -90,6 +90,25 @@ export function buildTrainingMetricRows(logs: TrainingLogRaw[], exercises: Exerc
       };
     })
     .filter((r): r is TrainingMetricRow => r !== null);
+
+  // #region agent log
+  if (typeof fetch !== 'undefined') {
+    const dropped = logs.length - result.length;
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'analytics.ts:buildTrainingMetricRows',
+        message: 'metric rows',
+        data: { logsIn: logs.length, exercisesCount: exercises.length, rowsOut: result.length, dropped },
+        timestamp: Date.now(),
+        hypothesisId: 'H2',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+
+  return result;
 }
 
 export type AlertStatus = 'OK' | 'WARNING' | 'ERROR';
@@ -272,8 +291,10 @@ export function buildExerciseProgressAndRisk(rows: TrainingMetricRow[], exercise
   const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
 
   const points: ExerciseTrendPoint[] = [];
+  let exercisesWith8PlusSessions = 0;
   map.forEach((exRows, exerciseId) => {
     const sessions = Array.from(new Set(exRows.map((r) => r.sessionId)));
+    if (sessions.length >= 8) exercisesWith8PlusSessions += 1;
     if (sessions.length < 8) return;
     const sorted = [...exRows].sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
     const recent = computeExerciseBaseline(sorted.slice(0, Math.ceil(sorted.length / 2)));
@@ -303,6 +324,22 @@ export function buildExerciseProgressAndRisk(rows: TrainingMetricRow[], exercise
       riskScore,
     });
   });
+
+  // #region agent log
+  if (typeof fetch !== 'undefined') {
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'analytics.ts:buildExerciseProgressAndRisk',
+        message: 'trend points',
+        data: { exercisesInMap: map.size, exercisesWith8PlusSessions, pointsLength: points.length },
+        timestamp: Date.now(),
+        hypothesisId: 'H3',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
 
   return points;
 }

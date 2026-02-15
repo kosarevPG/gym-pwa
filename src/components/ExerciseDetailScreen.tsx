@@ -371,9 +371,9 @@ export function ExerciseDetailScreen({
     let logOrderOffset = 0;
     for (let round = 1; round <= maxRounds; round++) {
       const orderIndex = round;
-      for (const block of blocks) {
+      blocks.forEach((block, blockIndex) => {
         const s = block.sets[round - 1];
-        if (!s || (!s.completed && !s.inputWeight && !s.reps)) continue;
+        if (!s || (!s.completed && !s.inputWeight && !s.reps)) return;
         const wtType = getWeightType(block.exercise);
         const logWeightMult =
           (wtType === 'barbell' ||
@@ -401,6 +401,7 @@ export function ExerciseDetailScreen({
           weight: totalKg,
           reps: rps,
           order_index: orderIndex,
+          exercise_order: blockIndex,
           input_wt: parseFloat(s.inputWeight) || 0,
           side: s.side ?? 'both',
           body_wt_snapshot: bodyWeight ?? undefined,
@@ -409,7 +410,7 @@ export function ExerciseDetailScreen({
           rest_seconds: (parseFloat(s.restMin) || 0) * 60,
           completed_at: completedAt,
         });
-      }
+      });
     }
 
     // #region agent log

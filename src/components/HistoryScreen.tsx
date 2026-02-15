@@ -341,10 +341,14 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
                         if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
                         byExercise.get(r.exercise_id)!.push(r);
                       });
-                      const exerciseOrder = [...byExercise.keys()].sort(
-                        (a, b) =>
+                      const exerciseOrder = [...byExercise.keys()].sort((a, b) => {
+                        const orderA = byExercise.get(a)![0].exercise_order ?? 0;
+                        const orderB = byExercise.get(b)![0].exercise_order ?? 0;
+                        if (orderA !== orderB) return orderA - orderB;
+                        return (
                           new Date(byExercise.get(a)![0].ts).getTime() - new Date(byExercise.get(b)![0].ts).getTime()
-                      );
+                        );
+                      });
                       const runs: { superset: boolean; exIds: string[] }[] = [];
                       let current: { superset: boolean; exIds: string[] } | null = null;
                       for (const exId of exerciseOrder) {

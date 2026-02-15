@@ -16,6 +16,13 @@ interface AnalyticsScreenProps {
 
 type Tab = 'overview' | 'exercise' | 'ramp';
 
+function formatInt(n: number): string {
+  return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 });
+}
+function formatDecimal(n: number, frac = 1): string {
+  return n.toLocaleString('ru-RU', { minimumFractionDigits: frac, maximumFractionDigits: frac });
+}
+
 export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
   const [tab, setTab] = useState<Tab>('overview');
   const [loading, setLoading] = useState(true);
@@ -35,6 +42,25 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
       const metricRows = buildTrainingMetricRows(logs, ex);
       setRows(metricRows);
       setExercises(ex);
+      // #region agent log
+      if (typeof fetch !== 'undefined') {
+        const weeklySeries = buildWeeklySeries(metricRows, 12);
+        const totalSessions = weeklySeries.reduce((s, w) => s + w.sessions, 0);
+        const totalVolume = weeklySeries.reduce((s, w) => s + w.volume, 0);
+        const trendRows = buildExerciseProgressAndRisk(metricRows, ex);
+        fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: 'AnalyticsScreen.tsx:useEffect',
+            message: 'analytics loaded',
+            data: { logsCount: logs.length, metricRowsCount: metricRows.length, totalSessions12w: totalSessions, totalVolume12w: totalVolume, trendRowsCount: trendRows.length },
+            timestamp: Date.now(),
+            hypothesisId: 'H3,H4',
+          }),
+        }).catch(() => {});
+      }
+      // #endregion
       const idsWithData = new Set(metricRows.map((r) => r.exerciseId));
       const firstWithData = ex.find((e) => idsWithData.has(e.id))?.id ?? '';
       setSelectedExerciseId((prev) => (idsWithData.has(prev) ? prev : firstWithData));
@@ -73,6 +99,22 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
     () => computeExerciseBaseline(selectedExerciseRows),
     [selectedExerciseRows],
   );
+  // #region agent log
+  if (typeof fetch !== 'undefined' && selectedExerciseRows.length >= 0) {
+    const base = selectedBaseline;
+    fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        location: 'AnalyticsScreen.tsx:selectedExercise',
+        message: 'exercise tab data',
+        data: { selectedExerciseId, selectedExerciseRowsCount: selectedExerciseRows.length, baselineVolumePerSet: base?.baselineVolumePerSet ?? null, baselineWeeklyVolume: base?.baselineWeeklyVolume ?? null },
+        timestamp: Date.now(),
+        hypothesisId: 'H1,H2',
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
   const selectedWeekly = useMemo(
     () => buildWeeklySeries(selectedExerciseRows, 12),
     [selectedExerciseRows],
@@ -131,7 +173,7 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
               <ul className="space-y-2">
                 {weeklySeries.map((p) => (
                   <li key={p.weekKey} className="text-sm">
-                    <div className="flex justify-between"><span>{p.label}</span><span>{p.sessions}</span></div>
+                    <div className="flex justify-between"><span>{p.label}</span><span>{formatInt(p.sessions)}</span></div>
                     <div className="h-1.5 bg-zinc-800 rounded overflow-hidden">
                       <div className="h-full bg-blue-500" style={{ width: `${(p.sessions / maxSessions) * 100}%` }} />
                     </div>
@@ -141,11 +183,11 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
             </section>
 
             <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
-              <div className="flex items-center gap-2 mb-3"><BarChart3 className="w-4 h-4" /><h2>Weekly Total Volume</h2></div>
+              <div className="flex items-center gap-2 mb-3"><BarChart3 className="w-4 h-4" /><h2>Weekly Total Volume (кг)</h2></div>
               <ul className="space-y-2">
                 {weeklySeries.map((p) => (
                   <li key={`${p.weekKey}-v`} className="text-sm">
-                    <div className="flex justify-between"><span>{p.label}</span><span>{Math.round(p.volume)}</span></div>
+                    <div className="flex justify-between"><span>{p.label}</span><span>{formatInt(Math.round(p.volume))}</span></div>
                     <div className="h-1.5 bg-zinc-800 rounded overflow-hidden">
                       <div className="h-full bg-emerald-500" style={{ width: `${(p.volume / maxVolume) * 100}%` }} />
                     </div>
@@ -162,7 +204,7 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
                   <li key={`p-${x.exerciseId}`} className="flex justify-between">
                     <span className="truncate max-w-[70%]">{x.exerciseName}</span>
                     <span className={x.progressPct >= 0 ? 'text-emerald-400' : 'text-amber-400'}>
-                      {x.progressPct >= 0 ? '+' : ''}{x.progressPct.toFixed(1)}%
+                      {x.progressPct >= 0 ? '+' : ''}{formatDecimal(x.progressPct)}%
                     </span>
                   </li>
                 ))}
@@ -211,30 +253,30 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
                   <h3 className="font-medium mb-2">{selectedExercise.nameRu}</h3>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="bg-zinc-800/60 rounded-lg p-2">
-                      <p className="text-zinc-400 text-xs">baseline median set volume</p>
-                      <p>{selectedBaseline.baselineVolumePerSet != null ? Math.round(selectedBaseline.baselineVolumePerSet) : '—'}</p>
+                      <p className="text-zinc-400 text-xs">baseline median set volume (кг)</p>
+                      <p>{selectedBaseline.baselineVolumePerSet != null ? formatInt(Math.round(selectedBaseline.baselineVolumePerSet)) : '—'}</p>
                     </div>
                     <div className="bg-zinc-800/60 rounded-lg p-2">
-                      <p className="text-zinc-400 text-xs">baseline weekly volume</p>
-                      <p>{selectedBaseline.baselineWeeklyVolume != null ? Math.round(selectedBaseline.baselineWeeklyVolume) : '—'}</p>
+                      <p className="text-zinc-400 text-xs">baseline weekly volume (кг)</p>
+                      <p>{selectedBaseline.baselineWeeklyVolume != null ? formatInt(Math.round(selectedBaseline.baselineWeeklyVolume)) : '—'}</p>
                     </div>
                     <div className="bg-zinc-800/60 rounded-lg p-2">
                       <p className="text-zinc-400 text-xs">median RPE</p>
-                      <p>{selectedMedianRpe.toFixed(1)}</p>
+                      <p>{formatDecimal(selectedMedianRpe)}</p>
                     </div>
                     <div className="bg-zinc-800/60 rounded-lg p-2">
                       <p className="text-zinc-400 text-xs">ramp flags count</p>
-                      <p>{selectedRampCount}</p>
+                      <p>{formatInt(selectedRampCount)}</p>
                     </div>
                   </div>
                 </section>
 
                 <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/50">
-                  <h4 className="text-sm text-zinc-400 mb-2">Weekly volume trend</h4>
+                  <h4 className="text-sm text-zinc-400 mb-2">Weekly volume trend (кг)</h4>
                   <ul className="space-y-2">
                     {selectedWeekly.map((p) => (
                       <li key={`sv-${p.weekKey}`} className="text-sm">
-                        <div className="flex justify-between"><span>{p.label}</span><span>{Math.round(p.volume)}</span></div>
+                        <div className="flex justify-between"><span>{p.label}</span><span>{formatInt(Math.round(p.volume))}</span></div>
                         <div className="h-1.5 bg-zinc-800 rounded overflow-hidden">
                           <div className="h-full bg-violet-500" style={{ width: `${(p.volume / maxSelectedVolume) * 100}%` }} />
                         </div>

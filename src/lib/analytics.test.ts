@@ -25,6 +25,7 @@ function log(overrides: Partial<TrainingLogRaw>): TrainingLogRaw {
     session_id: 's1',
     set_group_id: 'g1',
     exercise_id: 'ex-uuid-1',
+    exercise_order: 0,
     set_no: 1,
     reps: 8,
     input_wt: 20,
