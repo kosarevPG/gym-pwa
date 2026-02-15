@@ -423,40 +423,44 @@ export function ExerciseDetailScreen({
                           >
                             {isDone ? <Check className="w-5 h-5" /> : <span className="text-xs font-medium">{set.order}</span>}
                           </button>
-                          <div className="flex-1 grid grid-cols-3 divide-x divide-zinc-800 min-w-0">
-                            <div className="relative p-2 sm:p-3 flex flex-col justify-between">
-                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center">Вес</label>
-                              <input
-                                ref={(el) => (setInputRefs.current[`${set.id}-weight`] = el)}
-                                type="number"
-                                inputMode="decimal"
-                                value={set.inputWeight}
-                                onChange={(e) => updateSetInBlock(block.id, set.id, { inputWeight: e.target.value })}
-                                onFocus={selectAllOnFocus}
-                                placeholder={blockLastSnapshot ? String(blockLastSnapshot.weight) : '0'}
-                                className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
-                              />
+                          <div className="flex-1 grid grid-cols-3 divide-x divide-zinc-800 min-w-0 items-stretch">
+                            <div className="relative p-2 sm:p-3 flex flex-col min-h-0">
+                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center shrink-0">Вес</label>
+                              <div className="flex items-center justify-center min-h-[2.5rem]">
+                                <input
+                                  ref={(el) => (setInputRefs.current[`${set.id}-weight`] = el)}
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={set.inputWeight}
+                                  onChange={(e) => updateSetInBlock(block.id, set.id, { inputWeight: e.target.value })}
+                                  onFocus={selectAllOnFocus}
+                                  placeholder={blockLastSnapshot ? String(blockLastSnapshot.weight) : '0'}
+                                  className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
+                                />
+                              </div>
                               {effectiveKg !== null && !isNaN(effectiveKg) && (
-                                <div className="text-[10px] text-zinc-500 text-center mt-1 font-mono leading-none">
+                                <div className="text-[10px] text-zinc-500 text-center mt-0.5 font-mono leading-none shrink-0">
                                   ≈{Math.round(effectiveKg)} кг
                                 </div>
                               )}
                             </div>
-                            <div className="relative p-2 sm:p-3">
-                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center">Повт</label>
-                              <input
-                                type="number"
-                                inputMode="numeric"
-                                value={set.reps}
-                                onChange={(e) => updateSetInBlock(block.id, set.id, { reps: e.target.value })}
-                                onFocus={selectAllOnFocus}
-                                placeholder={blockLastSnapshot ? String(blockLastSnapshot.reps) : '0'}
-                                className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
-                              />
+                            <div className="relative p-2 sm:p-3 flex flex-col min-h-0">
+                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center shrink-0">Повт</label>
+                              <div className="flex items-center justify-center min-h-[2.5rem]">
+                                <input
+                                  type="number"
+                                  inputMode="numeric"
+                                  value={set.reps}
+                                  onChange={(e) => updateSetInBlock(block.id, set.id, { reps: e.target.value })}
+                                  onFocus={selectAllOnFocus}
+                                  placeholder={blockLastSnapshot ? String(blockLastSnapshot.reps) : '0'}
+                                  className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
+                                />
+                              </div>
                             </div>
-                            <div className="relative p-2 sm:p-3">
-                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center">Отдых</label>
-                              <div className="flex items-center justify-center gap-1 h-full pb-2">
+                            <div className="relative p-2 sm:p-3 flex flex-col min-h-0">
+                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center shrink-0">Отдых</label>
+                              <div className="flex items-center justify-center gap-1 min-h-[2.5rem]">
                                 <input
                                   type="number"
                                   value={set.restMin}

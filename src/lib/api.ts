@@ -259,6 +259,15 @@ export async function fetchLatestBodyWeight(): Promise<number | null> {
   return data.weight_kg != null ? Number(data.weight_kg) : null;
 }
 
+/** Сохранить вес тела с привязкой к дате (для effective load и др.). */
+export async function saveBodyWeight(weightKg: number, dateYyyyMmDd?: string): Promise<{ error: Error | null }> {
+  const createdAt = dateYyyyMmDd
+    ? new Date(dateYyyyMmDd + 'T12:00:00.000Z').toISOString()
+    : new Date().toISOString();
+  const { error } = await supabase.from(BIOMETRICS_TABLE).insert({ weight_kg: weightKg, created_at: createdAt });
+  return { error: error ?? null };
+}
+
 export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw[]> {
   const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 

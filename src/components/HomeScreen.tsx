@@ -16,9 +16,11 @@ import {
 import {
   createWorkoutSession,
   fetchAllExercises,
+  fetchLatestBodyWeight,
   fetchTrainingLogsWindow,
   getActiveWorkoutSession,
   completeWorkoutSession,
+  saveBodyWeight,
 } from '../lib/api';
 import {
   buildTrainingMetricRows,
@@ -61,6 +63,11 @@ export function HomeScreen({
   const [elapsedMs, setElapsedMs] = useState(0);
   const [starting, setStarting] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [bodyWeight, setBodyWeight] = useState<number | null>(null);
+  const [weightModalOpen, setWeightModalOpen] = useState(false);
+  const [weightInput, setWeightInput] = useState('');
+  const [weightDate, setWeightDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [savingWeight, setSavingWeight] = useState(false);
 
   // Активная сессия (тренировка в процессе)
   useEffect(() => {
@@ -121,6 +128,14 @@ export function HomeScreen({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLatestBodyWeight().then((kg) => {
+      if (!cancelled) setBodyWeight(kg);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [loading]);
 
   const datesWithLogs = useMemo(() => {
     const set = new Set<string>();
@@ -332,6 +347,30 @@ export function HomeScreen({
               </section>
             )}
 
+            {/* Вес тела */}
+            <section className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-zinc-400 text-sm">Мой вес</p>
+                  <p className="text-2xl font-semibold">
+                    {bodyWeight != null ? `${bodyWeight} кг` : '—'}
+                  </p>
+                  <p className="text-xs text-zinc-500">для effective load (гравитрон и др.)</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWeightInput(bodyWeight != null ? String(bodyWeight) : '');
+                    setWeightDate(new Date().toISOString().slice(0, 10));
+                    setWeightModalOpen(true);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium"
+                >
+                  {bodyWeight != null ? 'Изменить' : 'Ввести'}
+                </button>
+              </div>
+            </section>
+
             {/* Attendance Card */}
             <section
               className="p-4 rounded-2xl border border-zinc-800 bg-zinc-900 cursor-pointer hover:bg-zinc-800/50 transition-colors"
@@ -477,6 +516,77 @@ export function HomeScreen({
               >
                 <Pencil className="w-5 h-5 text-zinc-400" />
                 Редактировать / История
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка: ввод веса тела с датой */}
+      {weightModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-end p-4"
+          onClick={() => setWeightModalOpen(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setWeightModalOpen(false)}
+          role="dialog"
+          aria-label="Вес тела"
+        >
+          <div
+            className="w-full max-w-lg bg-zinc-900 rounded-t-2xl border border-zinc-800 border-b-0 p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Вес тела</h2>
+              <button
+                type="button"
+                onClick={() => setWeightModalOpen(false)}
+                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-zinc-400 text-sm mb-1">Вес, кг</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={weightInput}
+                  onChange={(e) => setWeightInput(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-zinc-400 text-sm mb-1">Дата</label>
+                <input
+                  type="date"
+                  value={weightDate}
+                  onChange={(e) => setWeightDate(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={savingWeight || !weightInput.trim()}
+                onClick={async () => {
+                  const kg = parseFloat(weightInput.replace(',', '.'));
+                  if (Number.isNaN(kg)) return;
+                  setSavingWeight(true);
+                  const { error: err } = await saveBodyWeight(kg, weightDate);
+                  setSavingWeight(false);
+                  if (err) {
+                    setError(err.message);
+                    return;
+                  }
+                  const latest = await fetchLatestBodyWeight();
+                  setBodyWeight(latest);
+                  setWeightModalOpen(false);
+                }}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50"
+              >
+                {savingWeight ? 'Сохранение…' : 'Сохранить'}
               </button>
             </div>
           </div>
