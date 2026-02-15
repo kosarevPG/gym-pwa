@@ -517,19 +517,42 @@ export interface LastSessionSetRow {
 /**
  * Подтягивает последнюю по дате сессию подходов по упражнению.
  * Для подстановки в поля используем input_wt (то, что пользователь вводил руками).
+ * После определения последней группы дозапрашиваем все подходы этой группы, чтобы не терять строки из-за лимита или null completed_at.
  */
 export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<LastSessionSetRow[]> {
   const select = 'set_group_id, order_index, input_wt, weight, reps, rest_seconds, completed_at';
-  const { data, error } = await supabase
+  const { data: firstBatch, error: err1 } = await supabase
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
     .order('completed_at', { ascending: false, nullsFirst: false })
     .limit(50);
 
-  if (error || !data?.length) return [];
+  if (err1 || !firstBatch?.length) return [];
 
-  const rows = data as Array<{
+  const lastGroupId = (firstBatch[0] as { set_group_id: string }).set_group_id;
+
+  const { data: sessionData, error: err2 } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(select)
+    .eq('exercise_id', exerciseId)
+    .eq('set_group_id', lastGroupId)
+    .order('order_index', { ascending: true });
+
+  if (err2 || !sessionData?.length) {
+    const sessionRows = firstBatch.filter((r: any) => r.set_group_id === lastGroupId);
+    sessionRows.sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0));
+    return sessionRows.map((r: any) => {
+      const wt = r.input_wt != null && r.input_wt > 0 ? r.input_wt : r.weight ?? 0;
+      return {
+        inputWeight: String(wt),
+        reps: String(r.reps ?? 0),
+        restMin: r.rest_seconds != null ? String(Math.round(r.rest_seconds / 60)) : '2',
+      };
+    });
+  }
+
+  const sessionRows = sessionData as Array<{
     set_group_id: string;
     order_index: number;
     input_wt?: number | null;
@@ -538,9 +561,6 @@ export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<
     rest_seconds?: number | null;
     completed_at: string | null;
   }>;
-
-  const lastGroupId = rows[0].set_group_id;
-  const sessionRows = rows.filter((r) => r.set_group_id === lastGroupId);
   sessionRows.sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
 
   return sessionRows.map((r) => {
