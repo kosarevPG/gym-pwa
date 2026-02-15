@@ -10,6 +10,7 @@ import {
   batchUpdateTrainingLogs,
 } from '../lib/api';
 import type { TrainingLogRaw } from '../lib/api';
+import { calcEffectiveLoadKg } from '../lib/metrics';
 import type { Exercise } from '../types';
 
 export interface SessionEditScreenProps {
@@ -106,7 +107,28 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     id: string,
     patch: { input_wt?: number; reps?: number; rest_seconds?: number }
   ) => {
-    const { error } = await updateTrainingLog(id, patch);
+    const row = rows.find((r) => r.id === id);
+    const ex = row ? exerciseMap.get(row.exercise_id) : null;
+    const inputWt = patch.input_wt ?? row?.input_wt ?? 0;
+    const repsNum = patch.reps ?? row?.reps ?? 0;
+    const type = ex?.weightType ?? 'standard';
+    const multiplier = ex?.simultaneous ? 2 : 1;
+    const effective =
+      ex != null
+        ? calcEffectiveLoadKg({
+            type,
+            inputWt,
+            bodyWt: row?.body_wt_snapshot ?? null,
+            baseWt: ex.baseWeight ?? 0,
+            multiplier,
+          })
+        : inputWt;
+    const payload: Parameters<typeof updateTrainingLog>[1] = {
+      ...patch,
+      weight: effective,
+      set_volume: effective * Math.max(0, repsNum),
+    };
+    const { error } = await updateTrainingLog(id, payload);
     if (error) {
       alert(error.message);
       return;
@@ -122,6 +144,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
           ...(patch.input_wt !== undefined && { input_wt: patch.input_wt }),
           ...(patch.reps !== undefined && { reps: patch.reps }),
           ...(patch.rest_seconds !== undefined && { rest_s: patch.rest_seconds }),
+          effective_load: effective,
         };
       })
     );
@@ -631,7 +654,7 @@ function SetRowEdit({
     const repsNum = Math.floor(parseFloat(reps) || 0);
     const restSec = parseRestMin(rest);
     if (inputWt !== row.input_wt || repsNum !== row.reps || restSec !== row.rest_s) {
-      onUpdate({ input_wt: inputWt, weight: inputWt, reps: repsNum, rest_seconds: restSec });
+      onUpdate({ input_wt: inputWt, reps: repsNum, rest_seconds: restSec });
     }
   };
 
@@ -700,7 +723,7 @@ function SetRowEdit({
       onClick={onStartEdit}
     >
       <span>
-        {row.input_wt} кг × {row.reps} повторений
+        {(row.effective_load ?? row.input_wt)} кг × {row.reps} повторений
         <span className="text-zinc-500 ml-2">отдых {restSecToMin(row.rest_s)}м</span>
       </span>
       <div className="flex items-center gap-0.5">

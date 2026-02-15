@@ -405,7 +405,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     rpe: Number(r.rpe ?? 0),
     rest_s: Number(r.rest_seconds ?? 0),
     body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
-    effective_load: r.effective_load != null ? Number(r.effective_load) : null,
+    effective_load: (r.effective_load != null ? Number(r.effective_load) : null) ?? (r.weight != null ? Number(r.weight) : null),
     side_mult: r.side_mult != null ? Number(r.side_mult) : null,
     set_volume: r.set_volume != null ? Number(r.set_volume) : null,
   }));
@@ -805,7 +805,7 @@ function mapRowToTrainingLogRaw(r: any): TrainingLogRaw {
     rpe: Number(r.rpe ?? 0),
     rest_s: Number(r.rest_seconds ?? 0),
     body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
-    effective_load: r.effective_load != null ? Number(r.effective_load) : null,
+    effective_load: (r.effective_load != null ? Number(r.effective_load) : null) ?? (r.weight != null ? Number(r.weight) : null),
     side_mult: r.side_mult != null ? Number(r.side_mult) : null,
     set_volume: r.set_volume != null ? Number(r.set_volume) : null,
   };
@@ -1185,7 +1185,7 @@ export async function importWorkoutData(
       session_id: sessionIdMap.get(r.session_id)!,
       set_group_id: r.set_group_id,
       exercise_id: r.exercise_id,
-      weight: r.input_wt,
+      weight: r.effective_load != null ? r.effective_load : r.input_wt,
       reps: r.reps,
       order_index: r.set_no,
       exercise_order: r.exercise_order ?? 0,

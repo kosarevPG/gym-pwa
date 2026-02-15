@@ -403,6 +403,7 @@ export function ExerciseDetailScreen({
           order_index: orderIndex,
           exercise_order: blockIndex,
           input_wt: parseFloat(s.inputWeight) || 0,
+          effective_load: totalKg,
           side: s.side ?? 'both',
           body_wt_snapshot: bodyWeight ?? undefined,
           set_volume: totalKg * rps,
