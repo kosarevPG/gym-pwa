@@ -761,6 +761,73 @@ export async function getActiveWorkoutSession(): Promise<WorkoutSessionRow | nul
   };
 }
 
+/** Взять сессию по id (нужно для даты логов при сохранении, если sessionStorage пуст). */
+export async function getWorkoutSessionById(sessionId: string): Promise<{ started_at: string; ended_at: string | null } | null> {
+  const { data, error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .select('started_at, ended_at')
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    started_at: String(data.started_at),
+    ended_at: data.ended_at != null ? String(data.ended_at) : null,
+  };
+}
+
+/** Логи сессии (id + completed_at) для переноса даты. */
+export async function getTrainingLogsBySessionId(sessionId: string): Promise<{ id: string; completed_at: string }[]> {
+  const { data, error } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select('id, completed_at')
+    .eq('session_id', sessionId);
+  if (error || !data) return [];
+  return (data as Array<{ id: string; completed_at: string | null }>)
+    .filter((r) => r.completed_at != null)
+    .map((r) => ({ id: String(r.id), completed_at: String(r.completed_at) }));
+}
+
+/** Перенести дату тренировки и всех её логов на новую дату (БД). */
+export async function updateWorkoutSessionDate(
+  sessionId: string,
+  newDateYyyyMmDd: string
+): Promise<{ error: { message: string } | null }> {
+  const session = await getWorkoutSessionById(sessionId);
+  if (!session) return { error: { message: 'Сессия не найдена' } };
+
+  const oldStartedMs = new Date(session.started_at).getTime();
+  const newStartedAt = `${newDateYyyyMmDd}T12:00:00.000Z`;
+  const newStartedMs = new Date(newStartedAt).getTime();
+
+  let newEndedAt: string;
+  if (session.ended_at) {
+    const oldEndedMs = new Date(session.ended_at).getTime();
+    const durationMs = oldEndedMs - oldStartedMs;
+    newEndedAt = new Date(newStartedMs + durationMs).toISOString();
+  } else {
+    newEndedAt = new Date(newStartedMs + 3600000).toISOString();
+  }
+
+  const { error: sessionErr } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .update({ started_at: newStartedAt, ended_at: newEndedAt })
+    .eq('id', sessionId);
+  if (sessionErr) return { error: { message: sessionErr.message } };
+
+  const logs = await getTrainingLogsBySessionId(sessionId);
+  for (const log of logs) {
+    const oldCompletedMs = new Date(log.completed_at).getTime();
+    const offsetFromStart = oldCompletedMs - oldStartedMs;
+    const newCompletedAt = new Date(newStartedMs + offsetFromStart).toISOString();
+    const { error: logErr } = await supabase
+      .from(TRAINING_LOGS_TABLE)
+      .update({ completed_at: newCompletedAt })
+      .eq('id', log.id);
+    if (logErr) return { error: { message: `Лог: ${logErr.message}` } };
+  }
+  return { error: null };
+}
+
 export interface WorkoutSummaryData {
   durationSec: number;
   tonnageKg: number;

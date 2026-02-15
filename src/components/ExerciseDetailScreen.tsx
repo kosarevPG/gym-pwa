@@ -7,6 +7,7 @@ import {
   fetchLastExerciseSessionSets,
   fetchPersonalBestWeight,
   fetchLatestBodyWeight,
+  getWorkoutSessionById,
   searchExercises,
   type ExerciseHistoryRow,
 } from '../lib/api';
@@ -353,14 +354,19 @@ export function ExerciseDetailScreen({
 
     // Один set_group_id на одно нажатие «Завершить» — иначе в истории ломается определение суперсетов
     const saveGroupId = crypto.randomUUID();
-    let backdatedStartedAt: string | null = null;
+    let baseStartedAt: string | null = null;
     try {
       const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(`gym-backdated-${sessionId}`) : null;
       if (raw) {
         const parsed = JSON.parse(raw) as { startedAt?: string };
-        backdatedStartedAt = parsed?.startedAt ?? null;
+        baseStartedAt = parsed?.startedAt ?? null;
       }
     } catch (_) {}
+    // Если sessionStorage пуст (перезаход в приложение) — берём дату сессии из БД, чтобы логи не уехали на «сегодня»
+    if (!baseStartedAt) {
+      const session = await getWorkoutSessionById(sessionId);
+      if (session) baseStartedAt = session.started_at;
+    }
     const logs: Parameters<typeof saveTrainingLogs>[0] = [];
     let logOrderOffset = 0;
     for (let round = 1; round <= maxRounds; round++) {
@@ -373,8 +379,8 @@ export function ExerciseDetailScreen({
         const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight, bodyWeight ?? undefined, logWeightMult) ?? 0;
         const rps = parseInt(s.reps) || 0;
         let completedAt: string;
-        if (backdatedStartedAt) {
-          const baseMs = new Date(backdatedStartedAt).getTime();
+        if (baseStartedAt) {
+          const baseMs = new Date(baseStartedAt).getTime();
           completedAt = new Date(baseMs + logOrderOffset * 60 * 1000).toISOString();
           logOrderOffset += 1;
         } else {

@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, ChevronRight, Calendar, Link2, Download, Upload } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar, Link2, Download, Upload, Pencil, X } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
+import { CalendarWidget } from './CalendarWidget';
 import {
   fetchTrainingLogsWindow,
   fetchAllExercises,
   exportWorkoutData,
   importWorkoutData,
+  updateWorkoutSessionDate,
   EXPORT_FORMAT_VERSION,
 } from '../lib/api';
 import type { TrainingLogRaw, ExportWorkoutPayload } from '../lib/api';
@@ -33,24 +35,25 @@ function formatDate(ts: string): string {
   return `${y}.${m}.${day}`;
 }
 
-/** Одна дата = одна тренировка. Все подходы за день объединяются в один блок. */
+/** Одна сессия (session_id) = одна тренировка. Группируем по session_id для возможности изменить дату. */
 function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGroup[] {
-  const byDate = new Map<string, TrainingLogRaw[]>();
+  const bySession = new Map<string, TrainingLogRaw[]>();
   logs.forEach((r) => {
-    const dateStr = formatDate(r.ts);
-    if (!byDate.has(dateStr)) byDate.set(dateStr, []);
-    byDate.get(dateStr)!.push(r);
+    const sid = r.session_id;
+    if (!bySession.has(sid)) bySession.set(sid, []);
+    bySession.get(sid)!.push(r);
   });
 
   const exerciseMap = new Map(exercises.map((e) => [e.id, e]));
 
   const sessions: SessionGroup[] = [];
-  byDate.forEach((rows, dateStr) => {
+  bySession.forEach((rows, sessionId) => {
     const sorted = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
     const first = sorted[0];
     const last = sorted[sorted.length - 1];
     const durationMs = new Date(last.ts).getTime() - new Date(first.ts).getTime();
     const durationMin = Math.round(durationMs / 60000);
+    const dateStr = formatDate(first.ts);
 
     const exerciseIds = Array.from(new Set(rows.map((r) => r.exercise_id)));
     const categorySlugs = Array.from(
@@ -65,7 +68,7 @@ function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGr
       .filter(Boolean) as string[];
 
     sessions.push({
-      sessionId: dateStr,
+      sessionId,
       date: dateStr,
       durationMin,
       categoryNames,
@@ -97,6 +100,9 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [editDateSessionId, setEditDateSessionId] = useState<string | null>(null);
+  const [editDateValue, setEditDateValue] = useState('');
+  const [savingDate, setSavingDate] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = useMemo(
@@ -190,6 +196,26 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
     }
   };
 
+  const openEditDate = (session: SessionGroup) => {
+    setEditDateSessionId(session.sessionId);
+    setEditDateValue(session.date.replace(/\./g, '-'));
+  };
+
+  const handleSaveDate = async () => {
+    if (!editDateSessionId) return;
+    setSavingDate(true);
+    const { error } = await updateWorkoutSessionDate(editDateSessionId, editDateValue);
+    setSavingDate(false);
+    if (error) {
+      setImportMessage(error.message);
+      return;
+    }
+    setEditDateSessionId(null);
+    const [logList, exList] = await loadData();
+    setLogs(logList);
+    setExercises(exList);
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col">
       <ScreenHeader title="История" onBack={onBack} />
@@ -276,6 +302,19 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
 
                 {isExpanded && (
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-2 space-y-4">
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditDate(session);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium"
+                      >
+                        <Pencil className="w-4 h-4" />
+                        Изменить дату
+                      </button>
+                    </div>
                     {(() => {
                       // Суперсет: один set_group_id (одно нажатие «Завершить») и один set_no у нескольких упражнений
                       const supersetExerciseIds = new Set<string>();
@@ -374,6 +413,46 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
             );
           })}
       </main>
+
+      {editDateSessionId && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex flex-col items-center justify-end p-4"
+          onClick={() => setEditDateSessionId(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setEditDateSessionId(null)}
+          role="dialog"
+          aria-label="Изменить дату тренировки"
+        >
+          <div
+            className="w-full max-w-lg bg-zinc-900 rounded-t-2xl border border-zinc-800 border-b-0 p-4 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Изменить дату тренировки</h2>
+              <button
+                type="button"
+                onClick={() => setEditDateSessionId(null)}
+                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <CalendarWidget
+              datesWithLogs={new Set()}
+              selectedDate={editDateValue}
+              onDayClick={(date) => setEditDateValue(date)}
+            />
+            <button
+              type="button"
+              disabled={savingDate}
+              onClick={handleSaveDate}
+              className="w-full mt-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium disabled:opacity-50"
+            >
+              {savingDate ? 'Сохранение…' : 'Сохранить'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
