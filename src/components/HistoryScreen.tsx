@@ -16,6 +16,7 @@ import { getCategoryBySlug } from '../data/categories';
 
 interface HistoryScreenProps {
   onBack: () => void;
+  onEditSession?: (sessionId: string, date: string) => void;
 }
 
 interface SessionGroup {
@@ -91,7 +92,7 @@ function restMin(restS: number): string {
   return rem > 0 ? `${h}ч ${fmt(rem)}м` : `${h}ч`;
 }
 
-export function HistoryScreen({ onBack }: HistoryScreenProps) {
+export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
   const [logs, setLogs] = useState<TrainingLogRaw[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -302,7 +303,20 @@ export function HistoryScreen({ onBack }: HistoryScreenProps) {
 
                 {isExpanded && (
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-2 space-y-4">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2 flex-wrap">
+                      {onEditSession && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditSession(session.sessionId, session.date);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Редактировать тренировку
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {

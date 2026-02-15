@@ -36,6 +36,14 @@ export function createSetFromHistory(s: { weight: number; inputWeight?: number; 
   });
 }
 
+/** Локальная дата в формате YYYY-MM-DD (без сдвига по UTC). */
+export function toLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** Оценка 1ПМ по формуле Эпли */
 export function calc1RM(weightKg: number, reps: number): number {
   if (reps <= 0 || weightKg <= 0) return 0;

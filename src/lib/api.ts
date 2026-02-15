@@ -123,6 +123,8 @@ export interface SaveTrainingLogRow {
   weight: number;
   reps: number;
   order_index: number;
+  /** Номер подхода внутри упражнения/суперсета (для отображения и сортировки) */
+  set_no?: number;
   /** Порядок упражнения в тренировке (0, 1, 2, …) */
   exercise_order?: number;
   input_wt?: number;
@@ -705,6 +707,7 @@ export async function saveTrainingLogs(
     weight: Number(r.weight),
     reps: Math.floor(Number(r.reps)) || 0,
     order_index: Math.floor(Number(r.order_index)) || 0,
+    set_no: r.set_no != null ? Math.floor(Number(r.set_no)) : Math.floor(Number(r.order_index)) || 0,
     exercise_order: r.exercise_order != null ? Math.floor(Number(r.exercise_order)) : 0,
     input_wt: r.input_wt != null ? Number(r.input_wt) : Number(r.weight),
     side: (r.side ?? 'both').toUpperCase(),
@@ -721,6 +724,9 @@ export async function saveTrainingLogs(
   }));
 
   const v2 = await supabase.from(TRAINING_LOGS_TABLE).insert(v2Payload);
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:saveTrainingLogs',message:v2.error?'insert failed':'insert ok',data:{rowsCount:rows.length,firstSessionId:rows[0]?.session_id,firstSetNo:rows[0]?.set_no,error:v2.error?.message},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+  // #endregion
   if (!v2.error) {
     return { error: null };
   }
@@ -754,6 +760,147 @@ export async function saveTrainingLogs(
       details: legacy.error.details != null ? String(legacy.error.details) : undefined,
     },
   };
+}
+
+// --- Редактирование прошедших тренировок (update/delete logs) ---
+
+const V2_LOG_SELECT = [
+  'id',
+  'completed_at',
+  'created_at',
+  'session_id',
+  'set_group_id',
+  'exercise_id',
+  'exercise_order',
+  'order_index',
+  'reps',
+  'weight',
+  'input_wt',
+  'side',
+  'rpe',
+  'rest_seconds',
+  'body_wt_snapshot',
+  'effective_load',
+  'side_mult',
+  'set_volume',
+].join(', ');
+
+function mapRowToTrainingLogRaw(r: any): TrainingLogRaw {
+  return {
+    id: String(r.id),
+    ts: String(r.completed_at ?? r.created_at),
+    session_id: String(r.session_id ?? r.set_group_id),
+    set_group_id: String(r.set_group_id),
+    exercise_id: String(r.exercise_id),
+    exercise_order: Number(r.exercise_order ?? 0),
+    set_no: Number(r.order_index ?? 0),
+    reps: Number(r.reps ?? 0),
+    input_wt: Number(r.input_wt ?? r.weight ?? 0),
+    side: ((): SetSide => {
+      const side = String(r.side ?? 'both').toLowerCase();
+      if (side === 'left') return 'left';
+      if (side === 'right') return 'right';
+      return 'both';
+    })(),
+    rpe: Number(r.rpe ?? 0),
+    rest_s: Number(r.rest_seconds ?? 0),
+    body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
+    effective_load: r.effective_load != null ? Number(r.effective_load) : null,
+    side_mult: r.side_mult != null ? Number(r.side_mult) : null,
+    set_volume: r.set_volume != null ? Number(r.set_volume) : null,
+  };
+}
+
+/** Загрузить все логи одной сессии для экрана редактирования. */
+export async function fetchLogsBySessionId(sessionId: string): Promise<TrainingLogRaw[]> {
+  const { data, error } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(V2_LOG_SELECT)
+    .eq('session_id', sessionId)
+    .order('exercise_order')
+    .order('order_index');
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:fetchLogsBySessionId',message:'session logs loaded',data:{sessionId,rowsCount:(data??[]).length,error:error?.message},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  if (error) {
+    console.error('fetchLogsBySessionId error:', error);
+    return [];
+  }
+  return (data ?? []).map(mapRowToTrainingLogRaw);
+}
+
+export interface UpdateTrainingLogPayload {
+  input_wt?: number;
+  weight?: number;
+  reps?: number;
+  rest_seconds?: number;
+  rpe?: number | null;
+  set_no?: number;
+  order_index?: number;
+  exercise_order?: number;
+  set_group_id?: string;
+  exercise_id?: string;
+  set_volume?: number | null;
+  effective_load?: number | null;
+}
+
+/** Обновить одну запись training_logs. */
+export async function updateTrainingLog(
+  id: string,
+  payload: UpdateTrainingLogPayload
+): Promise<{ error: { message: string } | null }> {
+  const body: Record<string, unknown> = {};
+  if (payload.input_wt !== undefined) body.input_wt = payload.input_wt;
+  if (payload.weight !== undefined) body.weight = payload.weight;
+  if (payload.reps !== undefined) body.reps = Math.floor(payload.reps);
+  if (payload.rest_seconds !== undefined) body.rest_seconds = Math.floor(payload.rest_seconds);
+  if (payload.rpe !== undefined) body.rpe = payload.rpe;
+  if (payload.set_no !== undefined) {
+    body.set_no = payload.set_no;
+    body.order_index = payload.set_no;
+  }
+  if (payload.order_index !== undefined) body.order_index = Math.floor(payload.order_index);
+  if (payload.exercise_order !== undefined) body.exercise_order = Math.floor(payload.exercise_order);
+  if (payload.set_group_id !== undefined) body.set_group_id = payload.set_group_id;
+  if (payload.exercise_id !== undefined) body.exercise_id = payload.exercise_id;
+  if (payload.set_volume !== undefined) body.set_volume = payload.set_volume;
+  if (payload.effective_load !== undefined) body.effective_load = payload.effective_load;
+  if (Object.keys(body).length === 0) return { error: null };
+  const { error } = await supabase.from(TRAINING_LOGS_TABLE).update(body).eq('id', id);
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:updateTrainingLog',message:error?'update failed':'update ok',data:{id,keys:Object.keys(body),error:error?.message},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  if (error) return { error: { message: error.message } };
+  return { error: null };
+}
+
+/** Удалить одну запись training_logs. */
+export async function deleteTrainingLog(id: string): Promise<{ error: { message: string } | null }> {
+  const { error } = await supabase.from(TRAINING_LOGS_TABLE).delete().eq('id', id);
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:deleteTrainingLog',message:error?'delete failed':'delete ok',data:{id,error:error?.message},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  if (error) return { error: { message: error.message } };
+  return { error: null };
+}
+
+/** Пакетное обновление записей (для смены порядка, объединения/разъединения суперсетов). */
+export async function batchUpdateTrainingLogs(
+  updates: { id: string; payload: UpdateTrainingLogPayload }[]
+): Promise<{ error: { message: string } | null }> {
+  for (const { id, payload } of updates) {
+    const result = await updateTrainingLog(id, payload);
+    if (result.error) {
+      // #region agent log
+      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:batchUpdateTrainingLogs',message:'batch failed',data:{updatesCount:updates.length,failedId:id,error:result.error?.message},timestamp:Date.now(),hypothesisId:'H2,H5'})}).catch(()=>{});
+      // #endregion
+      return result;
+    }
+  }
+  // #region agent log
+  if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:batchUpdateTrainingLogs',message:'batch ok',data:{updatesCount:updates.length},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+  // #endregion
+  return { error: null };
 }
 
 // --- Workout sessions (сессионный подход: одна тренировка = одна запись) ---

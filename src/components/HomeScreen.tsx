@@ -27,6 +27,7 @@ import {
   computeHomeInsights,
   getTodaySessionStatus,
 } from '../lib/analytics';
+import { toLocalDateStr } from '../utils';
 import { CalendarWidget } from './CalendarWidget';
 import type { WorkoutSessionRow } from '../lib/api';
 
@@ -139,7 +140,7 @@ export function HomeScreen({
 
   const datesWithLogs = useMemo(() => {
     const set = new Set<string>();
-    rows.forEach((r) => set.add(r.ts.slice(0, 10)));
+    rows.forEach((r) => set.add(toLocalDateStr(new Date(r.ts))));
     return set;
   }, [rows]);
 

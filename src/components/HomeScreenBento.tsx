@@ -23,6 +23,7 @@ import {
   saveBodyWeight,
 } from '../lib/api';
 import { buildTrainingMetricRows, computeHomeInsights } from '../lib/analytics';
+import { toLocalDateStr } from '../utils';
 import { CalendarWidget } from './CalendarWidget';
 import type { WorkoutSessionRow } from '../lib/api';
 
@@ -43,18 +44,18 @@ function formatElapsed(ms: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-/** Текущая неделя Пн–Вс: массив { day, date, dateStr, status }. */
+/** Текущая неделя Пн–Вс: массив { day, date, dateStr, status }. Используем локальные даты, чтобы точки не сдвигались (UTC давал ВТ ЧТ ВС вместо ПН СР СБ). */
 function getCurrentWeekDays(datesWithLogs: Set<string>): Array<{ day: string; date: number; dateStr: string; status: 'done' | 'missed' | 'today' | 'future' }> {
   const now = new Date();
   const dayOfWeek = now.getDay();
   const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = toLocalDateStr(now);
 
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = toLocalDateStr(d);
     const isToday = dateStr === todayStr;
     const hasLog = datesWithLogs.has(dateStr);
     const isFuture = d > now && !isToday;
@@ -179,7 +180,7 @@ export function HomeScreenBento({
 
   const datesWithLogs = useMemo(() => {
     const set = new Set<string>();
-    rows.forEach((r) => set.add(r.ts.slice(0, 10)));
+    rows.forEach((r) => set.add(toLocalDateStr(new Date(r.ts))));
     return set;
   }, [rows]);
 

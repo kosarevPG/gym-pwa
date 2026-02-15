@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { toLocalDateStr } from '../utils';
 
 const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
-function toDateOnly(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
+/** Сетка месяца по локальному времени (Пн–Вс), чтобы точки совпадали с полоской на главной. */
 function getMonthGrid(year: number, month: number): (number | null)[][] {
-  const first = new Date(Date.UTC(year, month, 1));
-  const last = new Date(Date.UTC(year, month + 1, 0));
-  const startDow = first.getUTCDay() || 7;
-  const daysInMonth = last.getUTCDate();
+  const first = new Date(year, month, 1);
+  const last = new Date(year, month + 1, 0);
+  const startDow = first.getDay() || 7;
+  const daysInMonth = last.getDate();
   const leadingEmpty = startDow - 1;
   const totalCells = leadingEmpty + daysInMonth;
   const rows = Math.ceil(totalCells / 7);
@@ -58,11 +56,11 @@ export function CalendarWidget({ datesWithLogs, onDayClick, selectedDate = null 
   const monthLabel = displayDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
 
   const handleDayClick = (day: number) => {
-    const dateIso = toDateOnly(new Date(Date.UTC(year, month, day)));
+    const dateIso = toLocalDateStr(new Date(year, month, day));
     onDayClick?.(dateIso);
   };
 
-  const today = toDateOnly(new Date());
+  const today = toLocalDateStr(new Date());
 
   return (
     <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-4">
@@ -95,7 +93,7 @@ export function CalendarWidget({ datesWithLogs, onDayClick, selectedDate = null 
           if (day === null) {
             return <div key={`e-${i}`} className="aspect-square" />;
           }
-          const dateIso = toDateOnly(new Date(Date.UTC(year, month, day)));
+          const dateIso = toLocalDateStr(new Date(year, month, day));
           const hasLog = datesWithLogs.has(dateIso);
           const isSelected = selectedDate === dateIso;
           const isToday = dateIso === today;

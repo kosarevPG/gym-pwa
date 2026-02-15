@@ -6,12 +6,13 @@ import { AddExerciseScreen } from './components/AddExerciseScreen';
 import { HomeScreenBento } from './components/HomeScreenBento';
 import { AnalyticsScreen } from './components/AnalyticsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
+import { SessionEditScreen } from './components/SessionEditScreen';
 import { WorkoutSummaryScreen } from './components/WorkoutSummaryScreen';
 import { getCategoryBySlug } from './data/categories';
 import { deleteExercise, getActiveWorkoutSession } from './lib/api';
 import type { Category, Exercise } from './types';
 
-type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history' | 'summary';
+type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history' | 'session-edit' | 'summary';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -20,6 +21,8 @@ export default function App() {
   const [exercisesRefreshTrigger, setExercisesRefreshTrigger] = useState(0);
   const [addFromCategoriesMode, setAddFromCategoriesMode] = useState(false);
   const [summarySessionId, setSummarySessionId] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingSessionDate, setEditingSessionDate] = useState<string | undefined>(undefined);
   const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
@@ -163,7 +166,30 @@ export default function App() {
   }
 
   if (screen === 'history') {
-    return <HistoryScreen onBack={() => setScreen('home')} />;
+    return (
+      <HistoryScreen
+        onBack={() => setScreen('home')}
+        onEditSession={(sid, date) => {
+          setEditingSessionId(sid);
+          setEditingSessionDate(date);
+          setScreen('session-edit');
+        }}
+      />
+    );
+  }
+
+  if (screen === 'session-edit' && editingSessionId) {
+    return (
+      <SessionEditScreen
+        sessionId={editingSessionId}
+        sessionDate={editingSessionDate}
+        onBack={() => {
+          setEditingSessionId(null);
+          setEditingSessionDate(undefined);
+          setScreen('history');
+        }}
+      />
+    );
   }
 
   if (screen === 'summary' && summarySessionId) {
