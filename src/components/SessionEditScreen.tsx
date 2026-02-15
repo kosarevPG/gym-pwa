@@ -720,13 +720,27 @@ function SetRowEdit({
     );
   }
 
+  const inputKg = row.input_wt ?? 0;
+  const effectiveKg = row.effective_load ?? row.input_wt ?? 0;
+  const showBoth = row.effective_load != null && Math.abs((row.effective_load ?? 0) - inputKg) > 0.01;
+  const formatKg = (n: number) => (n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1));
+
   return (
     <div
       className="flex justify-between items-center gap-2 py-1 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-2 -mx-2"
       onClick={onStartEdit}
     >
       <span>
-        {(row.effective_load ?? row.input_wt)} кг × {row.reps} повторений
+        {showBoth ? (
+          <>
+            <span className="text-zinc-400">{formatKg(inputKg)} кг (ввод)</span>
+            <span className="text-zinc-500 mx-1">→</span>
+            <span>{formatKg(effectiveKg)} кг (эфф.)</span>
+          </>
+        ) : (
+          formatKg(effectiveKg) + ' кг'
+        )}
+        {' × '}{row.reps} повторений
         <span className="text-zinc-500 ml-2">отдых {restSecToMin(row.rest_s)}м</span>
       </span>
       <div className="flex items-center gap-0.5">
