@@ -140,6 +140,8 @@ export function ExerciseDetailScreen({
   ]);
   const [saving, setSaving] = useState(false);
   const [restCountdownSec, setRestCountdownSec] = useState(0);
+  const [stopwatchSec, setStopwatchSec] = useState(0);
+  const [stopwatchRunning, setStopwatchRunning] = useState(false);
 
   const [historyRows, setHistoryRows] = useState<ExerciseHistoryRow[]>([]);
   const [lastSnapshot, setLastSnapshot] = useState<{ createdAt: string; weight: number; reps: number } | null>(null);
@@ -251,6 +253,12 @@ export function ExerciseDetailScreen({
     const interval = setInterval(() => setRestCountdownSec(prev => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(interval);
   }, [restCountdownSec]);
+
+  useEffect(() => {
+    if (!stopwatchRunning) return;
+    const interval = setInterval(() => setStopwatchSec((s) => s + 1), 1000);
+    return () => clearInterval(interval);
+  }, [stopwatchRunning]);
 
   useEffect(() => {
     if (!addSetPickerOpen) return;
@@ -459,28 +467,49 @@ export function ExerciseDetailScreen({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Таймер в хедере, если активен */}
-          {restCountdownSec > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-900/30 border border-emerald-500/30 rounded-full">
-              <Timer className="w-4 h-4 text-emerald-400 animate-pulse" />
-              <span className="font-mono font-medium text-emerald-400">{formatTime(restCountdownSec)}</span>
-            </div>
-          )}
+          {/* Таймер: отдых (обратный отсчёт) или стопwatch (0:00 →). По нажатию: Стоп (сброс в 0) / Старт (счёт от 0) */}
+          <button
+            type="button"
+            onClick={() => {
+              if (restCountdownSec > 0) {
+                setRestCountdownSec(0);
+                return;
+              }
+              if (stopwatchRunning) {
+                setStopwatchRunning(false);
+                setStopwatchSec(0);
+              } else {
+                setStopwatchSec(0);
+                setStopwatchRunning(true);
+              }
+            }}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-mono text-base font-semibold transition-all min-w-[4.5rem] justify-center ${
+              restCountdownSec > 0
+                ? 'bg-emerald-600/80 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-900/40'
+                : stopwatchRunning || stopwatchSec > 0
+                  ? 'bg-emerald-600/70 text-white border border-emerald-500/50'
+                  : 'bg-zinc-800 text-zinc-400 border border-zinc-600 hover:bg-zinc-700 hover:text-zinc-300'
+            }`}
+            title={restCountdownSec > 0 ? 'Остановить отдых' : stopwatchRunning ? 'Стоп (сброс)' : 'Старт (с 0:00)'}
+          >
+            <Timer className="w-5 h-5 flex-shrink-0" />
+            <span>{restCountdownSec > 0 ? formatTime(restCountdownSec) : formatTime(stopwatchSec)}</span>
+          </button>
           <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 rounded-full hover:bg-zinc-800">
             <MoreVertical className="w-5 h-5 text-zinc-400" />
           </button>
         </div>
       </header>
 
-      {/* 2. Main Content: Blocks (exercise + sets) */}
-      <div className="flex-1 p-4 space-y-6">
+      {/* 2. Main Content: Blocks (exercise + sets) — компактные по высоте */}
+      <div className="flex-1 p-4 space-y-4">
         {blocks.map((block) => {
           const isFirstBlock = block.exercise.id === exercise.id;
           const blockLastSnapshot = isFirstBlock ? lastSnapshot : null;
           const weightType = getWeightType(block.exercise);
 
           return (
-            <div key={block.id} className="space-y-3">
+            <div key={block.id} className="space-y-2">
               {blocks.length > 1 && (
                 <h2 className="text-sm font-semibold text-zinc-400 px-1">{block.exercise.nameRu}</h2>
               )}
@@ -516,7 +545,7 @@ export function ExerciseDetailScreen({
                 return (
                   <div
                     key={set.id}
-                    className="overflow-hidden rounded-2xl"
+                    className="overflow-hidden rounded-xl"
                     onTouchStart={canSwipeDelete ? (e) => {
                       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) return;
                       setRevealedDeleteSetId((prev) => (prev && prev !== set.id ? null : prev));
@@ -538,26 +567,26 @@ export function ExerciseDetailScreen({
                       style={canSwipeDelete ? { transform: `translateX(${setSwipeOffset}px)` } : undefined}
                     >
                       <div
-                        className={`flex-shrink-0 w-full rounded-2xl border transition-all duration-300 ${
-                          isDone ? 'bg-zinc-900 border-zinc-800 opacity-60' : 'bg-zinc-900 border-zinc-700 shadow-lg'
+                        className={`flex-shrink-0 w-full rounded-xl border transition-all duration-300 ${
+                          isDone ? 'bg-zinc-900 border-zinc-800 opacity-60' : 'bg-zinc-900 border-zinc-700 shadow-md'
                         }`}
                       >
                         <div className="flex items-stretch">
                           <button
                             type="button"
                             onClick={() => toggleSetComplete(block.id, set.id)}
-                            className={`w-10 flex items-center justify-center border-r transition-colors flex-shrink-0 ${
+                            className={`w-9 flex items-center justify-center border-r transition-colors flex-shrink-0 ${
                               isDone
                                 ? 'bg-emerald-500/20 border-emerald-500/20 text-emerald-500'
                                 : 'border-zinc-800 bg-zinc-800/50 text-zinc-500 hover:text-white'
                             }`}
                           >
-                            {isDone ? <Check className="w-5 h-5" /> : <span className="text-xs font-medium">{set.order}</span>}
+                            {isDone ? <Check className="w-4 h-4" /> : <span className="text-xs font-medium">{set.order}</span>}
                           </button>
                           <div className="flex-1 grid grid-cols-3 divide-x divide-zinc-800 min-w-0 items-stretch">
-                            <div className="relative p-2 sm:p-3 flex flex-col min-h-0">
-                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center shrink-0">Вес</label>
-                              <div className="flex items-center justify-center min-h-[2.5rem]">
+                            <div className="relative px-1.5 py-1.5 sm:px-2 sm:py-2 flex flex-col min-h-0">
+                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0 text-center shrink-0">Вес</label>
+                              <div className="flex items-center justify-center min-h-[1.75rem]">
                                 <input
                                   ref={(el) => (setInputRefs.current[`${set.id}-weight`] = el)}
                                   type="number"
@@ -566,18 +595,18 @@ export function ExerciseDetailScreen({
                                   onChange={(e) => updateSetInBlock(block.id, set.id, { inputWeight: e.target.value })}
                                   onFocus={selectAllOnFocus}
                                   placeholder={blockLastSnapshot ? String(blockLastSnapshot.weight) : '0'}
-                                  className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
+                                  className={`w-full bg-transparent text-center font-bold text-lg sm:text-xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                                 />
                               </div>
                               {effectiveKg !== null && !isNaN(effectiveKg) && (
-                                <div className="text-[10px] text-zinc-500 text-center mt-0.5 font-mono leading-none shrink-0">
+                                <div className="text-[9px] text-zinc-500 text-center font-mono leading-none shrink-0">
                                   ≈{formatEffectiveKg(effectiveKg)} кг
                                 </div>
                               )}
                             </div>
-                            <div className="relative p-2 sm:p-3 flex flex-col min-h-0">
-                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center shrink-0">Повт</label>
-                              <div className="flex items-center justify-center min-h-[2.5rem]">
+                            <div className="relative px-1.5 py-1.5 sm:px-2 sm:py-2 flex flex-col min-h-0">
+                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0 text-center shrink-0">Повт</label>
+                              <div className="flex items-center justify-center min-h-[1.75rem]">
                                 <input
                                   type="number"
                                   inputMode="numeric"
@@ -585,34 +614,34 @@ export function ExerciseDetailScreen({
                                   onChange={(e) => updateSetInBlock(block.id, set.id, { reps: e.target.value })}
                                   onFocus={selectAllOnFocus}
                                   placeholder={blockLastSnapshot ? String(blockLastSnapshot.reps) : '0'}
-                                  className={`w-full bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
+                                  className={`w-full bg-transparent text-center font-bold text-lg sm:text-xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                                 />
                               </div>
                             </div>
-                            <div className="relative p-2 sm:p-3 flex flex-col min-h-0">
-                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5 text-center shrink-0">Отдых</label>
-                              <div className="flex items-center justify-center gap-1 min-h-[2.5rem]">
+                            <div className="relative px-1.5 py-1.5 sm:px-2 sm:py-2 flex flex-col min-h-0">
+                              <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-0 text-center shrink-0">Отдых</label>
+                              <div className="flex items-center justify-center gap-0.5 min-h-[1.75rem]">
                                 <input
                                   type="number"
                                   value={set.restMin}
                                   onChange={(e) => updateSetInBlock(block.id, set.id, { restMin: e.target.value })}
                                   onFocus={selectAllOnFocus}
-                                  className={`w-10 bg-transparent text-center font-bold text-xl sm:text-2xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
+                                  className={`w-8 bg-transparent text-center font-bold text-lg sm:text-xl focus:outline-none ${isDone ? 'text-zinc-500' : 'text-white'}`}
                                 />
-                                <span className="text-xs text-zinc-500">м</span>
+                                <span className="text-[10px] text-zinc-500">м</span>
                               </div>
                             </div>
                           </div>
                         </div>
                         {!isDone && (
-                          <div className="bg-zinc-950/50 px-3 py-2 flex items-center gap-2 border-t border-zinc-800/50">
-                            <span className="text-[10px] text-zinc-600 font-bold uppercase">RPE</span>
+                          <div className="bg-zinc-950/50 px-2 py-1.5 flex items-center gap-1.5 border-t border-zinc-800/50">
+                            <span className="text-[9px] text-zinc-600 font-bold uppercase">RPE</span>
                             {[7, 8, 9, 10].map((val) => (
                               <button
                                 key={val}
                                 type="button"
                                 onClick={() => updateSetInBlock(block.id, set.id, { rpe: String(val) })}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-medium transition-all ${
+                                className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-medium transition-all ${
                                   set.rpe === String(val) ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                                 }`}
                               >
@@ -641,16 +670,16 @@ export function ExerciseDetailScreen({
                 <button
                   type="button"
                   onClick={() => addSetToBlock(block.id)}
-                  className="flex-1 py-4 rounded-2xl border-2 border-dashed border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/50 transition-all flex items-center justify-center gap-2 font-medium"
+                  className="flex-1 py-2.5 rounded-xl border-2 border-dashed border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/50 transition-all flex items-center justify-center gap-1.5 font-medium text-sm"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4" />
                   Добавить подход
                 </button>
                 {isFirstBlock && (
                   <button
                     type="button"
                     onClick={() => setAddSetPickerOpen(true)}
-                    className="flex-shrink-0 px-4 py-4 rounded-2xl border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 font-medium text-sm"
+                    className="flex-shrink-0 px-3 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all flex items-center justify-center gap-1 font-medium text-sm"
                     title="Добавить упражнение в суперсет"
                   >
                     <Plus className="w-4 h-4" />
@@ -663,11 +692,11 @@ export function ExerciseDetailScreen({
         })}
 
         {/* Заметка: сворачивается/разворачивается, сохраняется в localStorage */}
-        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+        <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
           <button
             type="button"
             onClick={() => setNoteExpanded((e) => !e)}
-            className="w-full px-4 py-3 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/50 transition-colors"
+            className="w-full px-3 py-2 flex items-center justify-between gap-2 text-left hover:bg-zinc-800/50 transition-colors"
           >
             <span className="text-sm font-medium text-zinc-300">Заметка</span>
             {noteExpanded ? (
