@@ -7,7 +7,6 @@ import {
   Dumbbell,
   Flame,
   History,
-  MoreHorizontal,
   Plus,
   Pencil,
   TrendingUp,
@@ -280,18 +279,10 @@ export function HomeScreenBento({
     <div className="min-h-screen bg-zinc-950 text-white pb-24 font-sans selection:bg-blue-500/30">
       {/* 1. WEEK STRIP */}
       <header className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/50 pt-4 pb-2 px-4">
-        <div className="flex justify-between items-center mb-4">
+        <div className="mb-4">
           <h1 className="text-lg font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
             {monthlyLabel}
           </h1>
-          <button
-            type="button"
-            onClick={() => setIsCalendarOpen(true)}
-            className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-400"
-            aria-label="Календарь"
-          >
-            <CalendarDays className="w-4 h-4" />
-          </button>
         </div>
 
         <div className="max-w-lg mx-auto flex gap-1">
@@ -344,14 +335,9 @@ export function HomeScreenBento({
               <div className="relative z-10">
                 {activeSession ? (
                   <>
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <h2 className="text-2xl font-bold text-white leading-tight">Идёт тренировка</h2>
-                        <p className="text-blue-100/80 text-sm mt-1 font-mono">{formatElapsed(elapsedMs)}</p>
-                      </div>
-                      <div className="bg-white/20 backdrop-blur-md p-2 rounded-xl text-white">
-                        <Dumbbell className="w-6 h-6" />
-                      </div>
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-bold text-white leading-tight">Идёт тренировка</h2>
+                      <p className="text-blue-100/80 text-sm mt-1 font-mono">{formatElapsed(elapsedMs)}</p>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -374,14 +360,9 @@ export function HomeScreenBento({
                   </>
                 ) : (
                   <>
-                    <div className="flex justify-between items-start mb-8">
-                      <div>
-                        <h2 className="text-3xl font-bold text-white leading-tight">Начать<br />тренировку</h2>
-                        <p className="text-blue-100/80 text-sm mt-1 font-medium">Выбери категорию и упражнения</p>
-                      </div>
-                      <div className="bg-white/20 backdrop-blur-md p-2 rounded-xl text-white">
-                        <Dumbbell className="w-6 h-6" />
-                      </div>
+                    <div className="mb-8">
+                      <h2 className="text-3xl font-bold text-white leading-tight">Начать<br />тренировку</h2>
+                      <p className="text-blue-100/80 text-sm mt-1 font-medium">Выбери категорию и упражнения</p>
                     </div>
                     <button
                       type="button"
@@ -477,7 +458,6 @@ export function HomeScreenBento({
                   <div className="text-xl font-semibold text-white mt-0.5">
                     {bodyWeight != null ? `${bodyWeight} кг` : '—'}
                   </div>
-                  <div className="text-xs text-zinc-500 mt-0.5">для effective load (гравитрон и др.)</div>
                 </div>
                 <span className="text-zinc-500 text-sm">Изменить</span>
               </button>
@@ -489,12 +469,12 @@ export function HomeScreenBento({
       {/* 4. BOTTOM NAV */}
       <nav className="fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-lg border-t border-zinc-800 pb-safe pt-2 px-6">
         <div className="flex justify-between items-center max-w-lg mx-auto">
-          <NavButton icon={Dumbbell} label="Тренировка" isActive onClick={onOpenExercises} />
+          <NavButton icon={Dumbbell} label="Упражнения" isActive onClick={onOpenExercises} />
           <NavButton icon={History} label="История" onClick={onOpenHistory} />
           <NavButton icon={BarChart3} label="Аналитика" onClick={onOpenAnalytics} />
           <NavButton
-            icon={MoreHorizontal}
-            label="Меню"
+            icon={CalendarDays}
+            label="Календарь"
             onClick={() => setIsCalendarOpen(true)}
           />
         </div>
