@@ -13,6 +13,7 @@ import {
 import type { TrainingLogRaw } from '../lib/api';
 import { calcEffectiveLoadKg } from '../lib/metrics';
 import type { Exercise } from '../types';
+import { getCategoryBySlug } from '../data/categories';
 
 export interface SessionEditScreenProps {
   sessionId: string;
@@ -104,6 +105,29 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
 
   const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const { runs, byExercise } = useMemo(() => buildRuns(rows), [rows]);
+
+  const sessionHeader = useMemo(() => {
+    if (rows.length === 0) return { date: sessionDate ?? '—', durationMin: 0, categoryNames: [] as string[] };
+    const sorted = [...rows].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const durationMs = new Date(last.ts).getTime() - new Date(first.ts).getTime();
+    const durationMin = Math.round(durationMs / 60000);
+    const dateStr =
+      sessionDate ??
+      (() => {
+        const d = new Date(first.ts);
+        return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+      })();
+    const exerciseIds = Array.from(new Set(rows.map((r) => r.exercise_id)));
+    const categorySlugs = Array.from(
+      new Set(exerciseIds.map((id) => exerciseMap.get(id)?.category).filter(Boolean) as string[])
+    );
+    const categoryNames = categorySlugs
+      .map((slug) => getCategoryBySlug(slug)?.name)
+      .filter(Boolean) as string[];
+    return { date: dateStr, durationMin, categoryNames };
+  }, [rows, sessionDate, exerciseMap]);
 
   const handleUpdateSet = async (
     id: string,
@@ -382,6 +406,18 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     <div className="min-h-screen bg-zinc-950 text-white pb-8">
       <ScreenHeader title={title} onBack={onBack} />
       <main className="p-4 space-y-4 max-w-lg mx-auto">
+        {runs.length > 0 && (
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 overflow-hidden px-4 py-3">
+            <div className="flex items-center gap-2 text-zinc-400 text-sm">
+              <span>{sessionHeader.date}</span>
+              <span>•</span>
+              <span>{sessionHeader.durationMin}м</span>
+            </div>
+            <p className="font-semibold text-white mt-0.5">
+              {sessionHeader.categoryNames.length ? sessionHeader.categoryNames.join(' • ') : '—'}
+            </p>
+          </div>
+        )}
         {runs.length === 0 ? (
           <p className="text-zinc-500">Нет подходов в этой тренировке.</p>
         ) : (
@@ -576,6 +612,7 @@ function ExerciseBlock({
 }: ExerciseBlockProps) {
   const ex = exerciseMap.get(exerciseId);
   const nameRu = ex?.nameRu ?? exerciseId;
+  const nameEn = ex?.nameEn;
   const setGroupId = sets[0]?.set_group_id ?? '';
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -583,7 +620,10 @@ function ExerciseBlock({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="font-medium text-white text-sm">{nameRu}</p>
+        <p className="font-medium text-white text-sm">
+          {nameRu}
+          {nameEn ? ` / ${nameEn}` : ''}
+        </p>
         <div className="flex items-center gap-1">
           {canMoveUp && (
             <button
@@ -637,7 +677,7 @@ function ExerciseBlock({
           </button>
         </div>
       </div>
-      <div className="space-y-1.5 pl-2">
+      <div className="space-y-1 pl-2">
         {sets.map((row, setIndex) => (
           <SetRowEdit
             key={row.id}
@@ -796,20 +836,18 @@ function SetRowEdit({
   const inputKg = row.input_wt ?? 0;
   const effectiveKg = row.effective_load ?? row.input_wt ?? 0;
   const formatKg = (n: number) => (n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1));
+  const restStr = restSecToMin(row.rest_s) + 'м';
 
   return (
     <div
-      className="flex justify-between items-center gap-2 py-1 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-2 -mx-2"
+      className="flex justify-between items-baseline gap-2 py-1 text-sm text-zinc-300 cursor-pointer hover:bg-zinc-800/50 rounded px-2 -mx-2"
       onClick={onStartEdit}
     >
-      <span>
-        <span className="text-zinc-400">{formatKg(inputKg)} кг (ввод)</span>
-        <span className="text-zinc-500 mx-1">→</span>
-        <span>{formatKg(effectiveKg)} кг (эфф.)</span>
-        {' × '}{row.reps} повторений
-        <span className="text-zinc-500 ml-2">отдых {restSecToMin(row.rest_s)}м</span>
+      <span className="min-w-0">
+        {formatKg(effectiveKg)} кг × {row.reps} повт, {restStr}
       </span>
-      <div className="flex items-center gap-0.5">
+      <span className="flex items-center gap-1 flex-shrink-0">
+        <span className="text-zinc-500">Input: {formatKg(inputKg)} кг</span>
         {setIndex > 0 && (
           <button type="button" onClick={(e) => { e.stopPropagation(); onMoveUp(); }} className="p-1 rounded hover:bg-zinc-700 text-zinc-500" aria-label="Поднять подход">
             <ChevronUp className="w-4 h-4" />
@@ -831,7 +869,7 @@ function SetRowEdit({
         >
           <Trash2 className="w-4 h-4" />
         </button>
-      </div>
+      </span>
     </div>
   );
 }
