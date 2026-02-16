@@ -8,6 +8,7 @@ import {
   deleteTrainingLog,
   saveTrainingLogs,
   batchUpdateTrainingLogs,
+  deleteWorkoutSession,
 } from '../lib/api';
 import type { TrainingLogRaw } from '../lib/api';
 import { calcEffectiveLoadKg } from '../lib/metrics';
@@ -82,6 +83,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
 
   const loadSession = () => {
@@ -464,6 +466,27 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
         >
           <Plus className="w-5 h-5" />
           Добавить упражнение
+        </button>
+
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={async () => {
+            if (!confirm('Удалить эту тренировку? Все подходы будут удалены.')) return;
+            setDeleting(true);
+            const { error } = await deleteWorkoutSession(sessionId);
+            setDeleting(false);
+            if (error) {
+              alert(error.message);
+              return;
+            }
+            onSaved?.();
+            onBack();
+          }}
+          className="w-full py-3 rounded-xl border border-red-500/50 text-red-400 hover:bg-red-500/10 flex items-center justify-center gap-2 disabled:opacity-50 mt-6"
+        >
+          <Trash2 className="w-5 h-5" />
+          {deleting ? 'Удаление…' : 'Удалить тренировку'}
         </button>
       </main>
 

@@ -1028,6 +1028,22 @@ export async function getWorkoutSessionById(sessionId: string): Promise<{ starte
   };
 }
 
+/** Удалить тренировку и все её логи (для экрана редактирования прошлой тренировки). */
+export async function deleteWorkoutSession(sessionId: string): Promise<{ error: { message: string } | null }> {
+  const { data: logRows } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select('id')
+    .eq('session_id', sessionId);
+  const ids = (logRows ?? []).map((r: { id: string }) => r.id);
+  for (const id of ids) {
+    const { error: delErr } = await supabase.from(TRAINING_LOGS_TABLE).delete().eq('id', id);
+    if (delErr) return { error: { message: delErr.message } };
+  }
+  const { error: sessionErr } = await supabase.from(WORKOUT_SESSIONS_TABLE).delete().eq('id', sessionId);
+  if (sessionErr) return { error: { message: sessionErr.message } };
+  return { error: null };
+}
+
 /** Сессия на дату (для комментария в календаре). Берём завершённую сессию, у которой started_at попадает в эту дату. */
 export async function getSessionForDate(dateYyyyMmDd: string): Promise<{ id: string; comment: string | null } | null> {
   const dayStart = `${dateYyyyMmDd}T00:00:00.000Z`;

@@ -9,7 +9,7 @@ import { HistoryScreen } from './components/HistoryScreen';
 import { SessionEditScreen } from './components/SessionEditScreen';
 import { WorkoutSummaryScreen } from './components/WorkoutSummaryScreen';
 import { getCategoryBySlug } from './data/categories';
-import { deleteExercise, getActiveWorkoutSession } from './lib/api';
+import { deleteExercise, getActiveWorkoutSession, createWorkoutSession } from './lib/api';
 import type { Category, Exercise } from './types';
 
 type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history' | 'session-edit' | 'summary';
@@ -95,6 +95,16 @@ export default function App() {
     setExercisesRefreshTrigger((t) => t + 1);
   }, []);
 
+  /** Вернуть текущую активную сессию или создать новую (авто-старт тренировки из меню Упражнения). */
+  const ensureWorkoutSession = useCallback(async (): Promise<string> => {
+    const active = await getActiveWorkoutSession();
+    if (active) return active.id;
+    const result = await createWorkoutSession();
+    if ('error' in result) throw new Error(result.error.message);
+    setSessionId(result.id);
+    return result.id;
+  }, []);
+
   const handleCategorySelect = useCallback(
     (category: Category) => {
       if (addFromCategoriesMode) {
@@ -128,6 +138,7 @@ export default function App() {
           setLastExerciseInSession(null);
           setScreen('exercises');
         }}
+        onEnsureSession={ensureWorkoutSession}
         onEditExercise={handleEditExercise}
         onDeleteExercise={handleDeleteExercise}
       />

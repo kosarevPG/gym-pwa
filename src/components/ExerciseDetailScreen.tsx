@@ -22,6 +22,8 @@ interface ExerciseDetailScreenProps {
   sessionId: string;
   onBack: () => void;
   onComplete: () => void;
+  /** При отметке подхода или «Завершить» — создать активную сессию, если её ещё нет (авто-старт тренировки). */
+  onEnsureSession?: () => Promise<string>;
   onEditExercise?: (exercise: ExerciseType) => void;
   onDeleteExercise?: (exercise: ExerciseType) => void;
 }
@@ -132,6 +134,7 @@ export function ExerciseDetailScreen({
   sessionId,
   onBack,
   onComplete,
+  onEnsureSession,
   onEditExercise,
   onDeleteExercise,
 }: ExerciseDetailScreenProps) {
@@ -338,6 +341,7 @@ export function ExerciseDetailScreen({
     updateSetInBlock(blockId, setId, { completed: isCompleting, doneAt: isCompleting ? now : undefined });
 
     if (isCompleting) {
+      onEnsureSession?.().catch(() => {});
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
       const isLastSet = setIndex === block.sets.length - 1;
       if (isLastSet) {
@@ -363,11 +367,13 @@ export function ExerciseDetailScreen({
       return;
     }
 
+    const effectiveSessionId = onEnsureSession ? await onEnsureSession().catch((e) => { setSaving(false); throw e; }) : sessionId;
+
     // Один set_group_id на одно нажатие «Завершить» — иначе в истории ломается определение суперсетов
     const saveGroupId = crypto.randomUUID();
     let baseStartedAt: string | null = null;
     try {
-      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(`gym-backdated-${sessionId}`) : null;
+      const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(`gym-backdated-${effectiveSessionId}`) : null;
       if (raw) {
         const parsed = JSON.parse(raw) as { startedAt?: string };
         baseStartedAt = parsed?.startedAt ?? null;
@@ -375,7 +381,7 @@ export function ExerciseDetailScreen({
     } catch (_) {}
     // Если sessionStorage пуст (перезаход в приложение) — берём дату сессии из БД, чтобы логи не уехали на «сегодня»
     if (!baseStartedAt) {
-      const session = await getWorkoutSessionById(sessionId);
+      const session = await getWorkoutSessionById(effectiveSessionId);
       if (session) baseStartedAt = session.started_at;
     }
     const logs: Parameters<typeof saveTrainingLogs>[0] = [];
@@ -406,7 +412,7 @@ export function ExerciseDetailScreen({
           completedAt = s.doneAt ?? new Date().toISOString();
         }
         logs.push({
-          session_id: sessionId,
+          session_id: effectiveSessionId,
           set_group_id: saveGroupId,
           exercise_id: block.exercise.id,
           weight: totalKg,
@@ -434,7 +440,7 @@ export function ExerciseDetailScreen({
       alert(saveErr.message || 'Не удалось сохранить подходы. Проверьте сеть и попробуйте снова.');
       return;
     }
-    clearDraftFromStorage(sessionId, exercise.id);
+    clearDraftFromStorage(effectiveSessionId, exercise.id);
     onComplete();
   };
 
