@@ -280,7 +280,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: prevOrder } }));
     const { error } = await batchUpdateTrainingLogs(updates);
     if (error) alert(error.message);
-    else loadSession();
+    else loadSession(true);
   };
 
   const handleMoveExerciseDown = async (exId: string) => {
@@ -294,7 +294,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: nextOrder } }));
     const { error } = await batchUpdateTrainingLogs(updates);
     if (error) alert(error.message);
-    else loadSession();
+    else loadSession(true);
   };
 
   const handleMergeWithNext = async (runIdx: number) => {
@@ -325,38 +325,46 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
 
   const handleMoveSetUp = async (rowId: string) => {
     const row = rows.find((r) => r.id === rowId);
-    if (!row || row.set_no <= 1) return;
-    const sameExercise = rows.filter(
-      (r) => r.exercise_id === row.exercise_id && r.session_id === sessionId
-    );
-    const prev = sameExercise.find((r) => r.set_no === row.set_no - 1);
-    if (!prev) return;
-    const { error: e1 } = await updateTrainingLog(rowId, { set_no: row.set_no - 1 });
+    if (!row) return;
+    const sameExercise = rows
+      .filter((r) => r.exercise_id === row.exercise_id && r.session_id === sessionId)
+      .sort((a, b) => a.set_no - b.set_no);
+    const idx = sameExercise.findIndex((r) => r.id === rowId);
+    if (idx <= 0) return;
+    const prev = sameExercise[idx - 1];
+    const { error: e1 } = await updateTrainingLog(rowId, { set_no: prev.set_no });
     if (e1) {
       alert(e1.message);
       return;
     }
     const { error: e2 } = await updateTrainingLog(prev.id, { set_no: row.set_no });
-    if (e2) alert(e2.message);
-    else loadSession();
+    if (e2) {
+      alert(e2.message);
+      return;
+    }
+    loadSession(true);
   };
 
   const handleMoveSetDown = async (rowId: string) => {
     const row = rows.find((r) => r.id === rowId);
     if (!row) return;
-    const sameExercise = rows.filter(
-      (r) => r.exercise_id === row.exercise_id && r.session_id === sessionId
-    );
-    const next = sameExercise.find((r) => r.set_no === row.set_no + 1);
-    if (!next) return;
-    const { error: e1 } = await updateTrainingLog(rowId, { set_no: row.set_no + 1 });
+    const sameExercise = rows
+      .filter((r) => r.exercise_id === row.exercise_id && r.session_id === sessionId)
+      .sort((a, b) => a.set_no - b.set_no);
+    const idx = sameExercise.findIndex((r) => r.id === rowId);
+    if (idx < 0 || idx >= sameExercise.length - 1) return;
+    const next = sameExercise[idx + 1];
+    const { error: e1 } = await updateTrainingLog(rowId, { set_no: next.set_no });
     if (e1) {
       alert(e1.message);
       return;
     }
     const { error: e2 } = await updateTrainingLog(next.id, { set_no: row.set_no });
-    if (e2) alert(e2.message);
-    else loadSession();
+    if (e2) {
+      alert(e2.message);
+      return;
+    }
+    loadSession(true);
   };
 
   const title = sessionDate ? `Редактирование ${sessionDate}` : 'Редактирование тренировки';
@@ -630,11 +638,12 @@ function ExerciseBlock({
         </div>
       </div>
       <div className="space-y-1.5 pl-2">
-        {sets.map((row) => (
+        {sets.map((row, setIndex) => (
           <SetRowEdit
             key={row.id}
             row={row}
             setsCount={sets.length}
+            setIndex={setIndex}
             isEditing={editingId === row.id}
             onStartEdit={() => setEditingId(row.id)}
             onBlur={() => setEditingId(null)}
@@ -655,6 +664,7 @@ function ExerciseBlock({
 interface SetRowEditProps {
   row: TrainingLogRaw;
   setsCount: number;
+  setIndex: number;
   isEditing: boolean;
   onStartEdit: () => void;
   onBlur: () => void;
@@ -667,6 +677,7 @@ interface SetRowEditProps {
 function SetRowEdit({
   row,
   setsCount,
+  setIndex,
   isEditing,
   onStartEdit,
   onBlur,
@@ -757,12 +768,12 @@ function SetRowEdit({
           placeholder="мин"
         />
         <span className="text-zinc-500">мин отдых</span>
-        {row.set_no > 1 && (
+        {setIndex > 0 && (
           <button type="button" onClick={onMoveUp} className="p-1 rounded hover:bg-zinc-700 text-zinc-500" aria-label="Поднять подход">
             <ChevronUp className="w-4 h-4" />
           </button>
         )}
-        {row.set_no < setsCount && (
+        {setIndex < setsCount - 1 && (
           <button type="button" onClick={onMoveDown} className="p-1 rounded hover:bg-zinc-700 text-zinc-500" aria-label="Опустить подход">
             <ChevronDown className="w-4 h-4" />
           </button>
@@ -799,12 +810,12 @@ function SetRowEdit({
         <span className="text-zinc-500 ml-2">отдых {restSecToMin(row.rest_s)}м</span>
       </span>
       <div className="flex items-center gap-0.5">
-        {row.set_no > 1 && (
+        {setIndex > 0 && (
           <button type="button" onClick={(e) => { e.stopPropagation(); onMoveUp(); }} className="p-1 rounded hover:bg-zinc-700 text-zinc-500" aria-label="Поднять подход">
             <ChevronUp className="w-4 h-4" />
           </button>
         )}
-        {row.set_no < setsCount && (
+        {setIndex < setsCount - 1 && (
           <button type="button" onClick={(e) => { e.stopPropagation(); onMoveDown(); }} className="p-1 rounded hover:bg-zinc-700 text-zinc-500" aria-label="Опустить подход">
             <ChevronDown className="w-4 h-4" />
           </button>
