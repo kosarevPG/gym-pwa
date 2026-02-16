@@ -914,21 +914,23 @@ export async function updateTrainingLog(
   if (payload.set_volume !== undefined) body.set_volume = payload.set_volume;
   if (payload.effective_load !== undefined) body.effective_load = payload.effective_load;
   if (Object.keys(body).length === 0) return { error: null };
-  const { error } = await supabase.from(TRAINING_LOGS_TABLE).update(body).eq('id', id);
+  const { data, error } = await supabase.from(TRAINING_LOGS_TABLE).update(body).eq('id', id).select('id');
   // #region agent log
   if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:updateTrainingLog',message:error?'update failed':'update ok',data:{id,keys:Object.keys(body),error:error?.message},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
   // #endregion
   if (error) return { error: { message: error.message } };
+  if (!data || data.length === 0) return { error: { message: 'Не удалось обновить запись (нет прав или запись не найдена)' } };
   return { error: null };
 }
 
 /** Удалить одну запись training_logs. */
 export async function deleteTrainingLog(id: string): Promise<{ error: { message: string } | null }> {
-  const { error } = await supabase.from(TRAINING_LOGS_TABLE).delete().eq('id', id);
+  const { data, error } = await supabase.from(TRAINING_LOGS_TABLE).delete().eq('id', id).select('id');
   // #region agent log
   if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:deleteTrainingLog',message:error?'delete failed':'delete ok',data:{id,error:error?.message},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
   if (error) return { error: { message: error.message } };
+  if (!data || data.length === 0) return { error: { message: 'Не удалось удалить подход (нет прав или запись не найдена)' } };
   return { error: null };
 }
 

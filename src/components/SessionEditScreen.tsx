@@ -86,8 +86,8 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
   const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
 
-  const loadSession = () => {
-    setLoading(true);
+  const loadSession = (silent = false) => {
+    if (!silent) setLoading(true);
     Promise.all([fetchLogsBySessionId(sessionId), fetchAllExercises()]).then(([logList, exList]) => {
       setRows(logList);
       setExercises(exList);
@@ -166,6 +166,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleDeleteSet',message:'delete set success',data:{id},timestamp:Date.now(),hypothesisId:'H3,H5'})}).catch(()=>{});
     // #endregion
     setRows((prev) => prev.filter((r) => r.id !== id));
+    loadSession(true);
   };
 
   const handleAddSet = async (exerciseId: string, setGroupId: string, exerciseOrder: number) => {
