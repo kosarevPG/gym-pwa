@@ -1030,6 +1030,9 @@ export async function getWorkoutSessionById(sessionId: string): Promise<{ starte
 
 /** Удалить тренировку и все её логи (для экрана редактирования прошлой тренировки). */
 export async function deleteWorkoutSession(sessionId: string): Promise<{ error: { message: string } | null }> {
+  if (!isUuid(sessionId)) {
+    return { error: { message: 'Эту тренировку нельзя удалить: она не сохранена в базе (старая или тестовая запись).' } };
+  }
   const { data: logRows } = await supabase
     .from(TRAINING_LOGS_TABLE)
     .select('id')
