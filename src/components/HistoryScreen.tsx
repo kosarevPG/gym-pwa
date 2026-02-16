@@ -108,7 +108,9 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
   const [editDateSessionId, setEditDateSessionId] = useState<string | null>(null);
   const [editDateValue, setEditDateValue] = useState('');
   const [savingDate, setSavingDate] = useState(false);
+  const [pencilMenuOpen, setPencilMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pencilButtonRef = useRef<HTMLButtonElement>(null);
 
   const loadData = useMemo(
     () => () => Promise.all([fetchTrainingLogsWindow(84), fetchAllExercises()]),
@@ -129,6 +131,10 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
 
   const sessions = useMemo(() => buildSessions(logs, exercises), [logs, exercises]);
   const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
+  const expandedSessionForPencil = useMemo(
+    () => sessions.find((s) => expandedIds.has(s.sessionId)) ?? null,
+    [sessions, expandedIds]
+  );
 
   const handleExport = async () => {
     setExporting(true);
@@ -254,6 +260,55 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
             <Upload className="w-4 h-4" />
             {importing ? '…' : 'Импорт'}
           </button>
+          <div className="relative">
+            <button
+              ref={pencilButtonRef}
+              type="button"
+              onClick={() => setPencilMenuOpen((v) => !v)}
+              disabled={!expandedSessionForPencil}
+              className="flex items-center justify-center p-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white disabled:opacity-50 disabled:pointer-events-none"
+              title={expandedSessionForPencil ? 'Редактировать тренировку / Изменить дату' : 'Сначала разверните тренировку'}
+              aria-haspopup="true"
+              aria-expanded={pencilMenuOpen}
+            >
+              <Pencil className="w-5 h-5" />
+            </button>
+            {pencilMenuOpen && expandedSessionForPencil && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  aria-hidden="true"
+                  onClick={() => setPencilMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] py-1 rounded-xl bg-zinc-800 border border-zinc-700 shadow-xl">
+                  {onEditSession && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onEditSession(expandedSessionForPencil.sessionId, expandedSessionForPencil.date);
+                        setPencilMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-zinc-200 hover:bg-zinc-700"
+                    >
+                      <Pencil className="w-4 h-4 flex-shrink-0" />
+                      Редактировать тренировку
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openEditDate(expandedSessionForPencil);
+                      setPencilMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-zinc-200 hover:bg-zinc-700"
+                  >
+                    <Pencil className="w-4 h-4 flex-shrink-0" />
+                    Изменить дату
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -307,32 +362,6 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
 
                 {isExpanded && (
                   <div className="border-t border-zinc-800 px-4 pb-4 pt-2 space-y-4">
-                    <div className="flex justify-end gap-2 flex-wrap">
-                      {onEditSession && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditSession(session.sessionId, session.date);
-                          }}
-                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium"
-                        >
-                          <Pencil className="w-4 h-4" />
-                          Редактировать тренировку
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditDate(session);
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium"
-                      >
-                        <Pencil className="w-4 h-4" />
-                        Изменить дату
-                      </button>
-                    </div>
                     {(() => {
                       // Суперсет: один set_group_id (одно нажатие «Завершить») и один set_no у нескольких упражнений
                       const supersetExerciseIds = new Set<string>();
