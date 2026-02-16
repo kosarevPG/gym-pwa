@@ -20,6 +20,8 @@ import {
   getActiveWorkoutSession,
   completeWorkoutSession,
   saveBodyWeight,
+  getSessionForDate,
+  updateWorkoutSessionComment,
 } from '../lib/api';
 import { buildTrainingMetricRows, computeHomeInsights } from '../lib/analytics';
 import { toLocalDateStr } from '../utils';
@@ -113,6 +115,9 @@ export function HomeScreenBento({
   const [bodyWeight, setBodyWeight] = useState<number | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [daySheetDate, setDaySheetDate] = useState<string | null>(null);
+  const [daySheetSession, setDaySheetSession] = useState<{ id: string; comment: string | null } | null>(null);
+  const [daySheetCommentText, setDaySheetCommentText] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
   const [weightModalOpen, setWeightModalOpen] = useState(false);
   const [weightInput, setWeightInput] = useState('');
   const [weightDate, setWeightDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -270,7 +275,34 @@ export function HomeScreenBento({
     onWorkoutFinished(activeSession.id);
   };
 
-  const closeDaySheet = () => setDaySheetDate(null);
+  const closeDaySheet = () => {
+    setDaySheetDate(null);
+    setDaySheetSession(null);
+    setDaySheetCommentText('');
+  };
+
+  useEffect(() => {
+    if (!daySheetDate) {
+      setDaySheetSession(null);
+      setDaySheetCommentText('');
+      return;
+    }
+    if (!datesWithLogs.has(daySheetDate)) {
+      setDaySheetSession(null);
+      setDaySheetCommentText('');
+      return;
+    }
+    let cancelled = false;
+    getSessionForDate(daySheetDate).then((s) => {
+      if (!cancelled) {
+        setDaySheetSession(s);
+        setDaySheetCommentText(s?.comment ?? '');
+      }
+    }).catch(() => {
+      if (!cancelled) setDaySheetSession(null);
+    });
+    return () => { cancelled = true; };
+  }, [daySheetDate, datesWithLogs]);
 
   const alert = insights?.alert ?? { title: 'Загрузка…', description: '', status: 'INFO' as const };
   const statusBarWidth = alert.status === 'ERROR' ? 1 : alert.status === 'WARNING' ? 0.6 : 0.75;
@@ -535,6 +567,28 @@ export function HomeScreenBento({
                 <X className="w-5 h-5" />
               </button>
             </div>
+            {daySheetSession && (
+              <div className="mb-4 p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/50">
+                <label className="block text-xs font-medium text-zinc-400 mb-2">Комментарий к тренировке</label>
+                <textarea
+                  value={daySheetCommentText}
+                  onChange={(e) => setDaySheetCommentText(e.target.value)}
+                  onBlur={async () => {
+                    if (!daySheetSession || savingComment) return;
+                    const value = daySheetCommentText.trim() || null;
+                    if (value === (daySheetSession.comment ?? '')) return;
+                    setSavingComment(true);
+                    const { error } = await updateWorkoutSessionComment(daySheetSession.id, value);
+                    setSavingComment(false);
+                    if (!error) setDaySheetSession((s) => (s ? { ...s, comment: value } : s));
+                  }}
+                  placeholder="Краткая заметка о тренировке…"
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+                {savingComment && <p className="text-[10px] text-zinc-500 mt-1">Сохранение…</p>}
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <button
                 type="button"

@@ -1028,6 +1028,39 @@ export async function getWorkoutSessionById(sessionId: string): Promise<{ starte
   };
 }
 
+/** Сессия на дату (для комментария в календаре). Берём завершённую сессию, у которой started_at попадает в эту дату. */
+export async function getSessionForDate(dateYyyyMmDd: string): Promise<{ id: string; comment: string | null } | null> {
+  const dayStart = `${dateYyyyMmDd}T00:00:00.000Z`;
+  const dayEnd = new Date(new Date(dayStart).getTime() + 86400000).toISOString();
+  const { data, error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .select('id, comment')
+    .eq('status', 'completed')
+    .gte('started_at', dayStart)
+    .lt('started_at', dayEnd)
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: String(data.id),
+    comment: data.comment != null ? String(data.comment) : null,
+  };
+}
+
+/** Обновить комментарий к тренировке. */
+export async function updateWorkoutSessionComment(
+  sessionId: string,
+  comment: string | null
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await supabase
+    .from(WORKOUT_SESSIONS_TABLE)
+    .update({ comment: comment ?? null })
+    .eq('id', sessionId);
+  if (error) return { error: { message: error.message } };
+  return { error: null };
+}
+
 /** Логи сессии (id + completed_at) для переноса даты. */
 export async function getTrainingLogsBySessionId(sessionId: string): Promise<{ id: string; completed_at: string }[]> {
   const { data, error } = await supabase
