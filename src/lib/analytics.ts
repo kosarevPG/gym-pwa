@@ -197,14 +197,11 @@ export function computeHomeInsights(rows: TrainingMetricRow[], exercises: Exerci
 
     const baseline = computeExerciseBaseline(exRows, { attendanceOk: baselineAttendanceOk });
     const weekly = exWeekRows.reduce((acc, r) => acc + (r.setVolume ?? 0), 0);
-    const medRpe = median(exWeekRows.map((r) => r.rpe)) ?? 0;
     const medReps = median(exWeekRows.map((r) => r.reps)) ?? 0;
     const fatigue = computeFatigueFlag({
       weeklyVolume: weekly,
       baselineWeeklyVolume: baseline.baselineWeeklyVolume,
-      baselineRpe: baseline.baselineRpe,
       baselineReps: baseline.baselineReps,
-      medianRpe: medRpe,
       medianReps: medReps,
     });
     const underload = computeUnderloadFlag({
@@ -305,14 +302,11 @@ export function buildExerciseProgressAndRisk(rows: TrainingMetricRow[], exercise
     const week = weekStart(new Date());
     const exWeekRows = exRows.filter((r) => weekStart(new Date(r.ts)) === week);
     const weekly = exWeekRows.reduce((acc, r) => acc + (r.setVolume ?? 0), 0);
-    const medRpe = median(exWeekRows.map((r) => r.rpe)) ?? 0;
     const medReps = median(exWeekRows.map((r) => r.reps)) ?? 0;
     const fatigue = computeFatigueFlag({
       weeklyVolume: weekly,
       baselineWeeklyVolume: recent.baselineWeeklyVolume,
-      baselineRpe: recent.baselineRpe,
       baselineReps: recent.baselineReps,
-      medianRpe: medRpe,
       medianReps: medReps,
     });
     const riskScore = fatigue.level === 'overload' ? 3 : fatigue.level === 'warning' ? 2 : 0;

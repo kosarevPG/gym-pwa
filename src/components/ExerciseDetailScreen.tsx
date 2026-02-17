@@ -72,7 +72,6 @@ function createSetForExercise(ex: ExerciseType, order: number): WorkoutSet {
     inputWeight: '',
     reps: '',
     restMin: String(Math.round((ex.defaultRestSeconds ?? 120) / 60)),
-    rpe: '',
     completed: false,
     order,
     side: 'both',
@@ -82,7 +81,7 @@ function createSetForExercise(ex: ExerciseType, order: number): WorkoutSet {
 
 const DRAFT_KEY_PREFIX = 'gym-draft-';
 
-type DraftBlock = { exerciseId: string; sets: Array<{ inputWeight: string; reps: string; restMin: string; rpe: string; completed: boolean; order: number; side: string }> };
+type DraftBlock = { exerciseId: string; sets: Array<{ inputWeight: string; reps: string; restMin: string; completed: boolean; order: number; side: string }> };
 
 function getDraftKey(sessionId: string, exerciseId: string): string {
   return `${DRAFT_KEY_PREFIX}${sessionId}-${exerciseId}`;
@@ -98,7 +97,6 @@ function saveDraftToStorage(sessionId: string, exerciseId: string, blocks: Exerc
           inputWeight: s.inputWeight,
           reps: s.reps,
           restMin: s.restMin,
-          rpe: s.rpe,
           completed: s.completed,
           order: s.order,
           side: String(s.side ?? 'both'),
@@ -210,7 +208,6 @@ export function ExerciseDetailScreen({
           inputWeight: s.inputWeight,
           reps: s.reps,
           restMin: s.restMin,
-          rpe: s.rpe,
           completed: s.completed,
           order: s.order,
           side: (s.side as WorkoutSet['side']) ?? 'both',
@@ -424,7 +421,6 @@ export function ExerciseDetailScreen({
           side: s.side ?? 'both',
           body_wt_snapshot: bodyWeight ?? undefined,
           set_volume: totalKg * rps,
-          rpe: s.rpe ? parseFloat(s.rpe) : undefined,
           rest_seconds: (parseFloat(s.restMin) || 0) * 60,
           completed_at: completedAt,
         });
@@ -639,23 +635,6 @@ export function ExerciseDetailScreen({
                             </div>
                           </div>
                         </div>
-                        {!isDone && (
-                          <div className="bg-zinc-950/50 px-2 py-1.5 flex items-center gap-1.5 border-t border-zinc-800/50">
-                            <span className="text-[9px] text-zinc-600 font-bold uppercase">RPE</span>
-                            {[7, 8, 9, 10].map((val) => (
-                              <button
-                                key={val}
-                                type="button"
-                                onClick={() => updateSetInBlock(block.id, set.id, { rpe: String(val) })}
-                                className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-medium transition-all ${
-                                  set.rpe === String(val) ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                                }`}
-                              >
-                                {val}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                       </div>
                       {block.sets.length > 1 && (
                         <button

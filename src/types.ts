@@ -47,7 +47,6 @@ export interface WorkoutSet {
   inputWeight: string;
   reps: string;
   restMin: string;
-  rpe: string;
   restAfterSeconds?: number;
   doneAt?: string;
   supersetExerciseId?: string | null;

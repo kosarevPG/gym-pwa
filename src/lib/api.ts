@@ -132,7 +132,6 @@ export interface SaveTrainingLogRow {
   body_wt_snapshot?: number | null;
   side_mult?: number;
   set_volume?: number;
-  rpe?: number;
   rest_seconds?: number;
   superset_exercise_id?: string | null;
   one_rm?: number;
@@ -762,7 +761,6 @@ export async function saveTrainingLogs(
     body_wt_snapshot: r.body_wt_snapshot != null ? Number(r.body_wt_snapshot) : null,
     side_mult: r.side_mult != null ? Number(r.side_mult) : null,
     set_volume: r.set_volume != null ? Number(r.set_volume) : (r.volume != null ? Number(r.volume) : null),
-    rpe: r.rpe != null ? Number(r.rpe) : null,
     rest_seconds: r.rest_seconds != null ? Math.floor(Number(r.rest_seconds)) : null,
     superset_exercise_id: r.superset_exercise_id && isUuid(r.superset_exercise_id) ? r.superset_exercise_id : null,
     one_rm: r.one_rm != null ? Number(r.one_rm) : null,
@@ -882,7 +880,6 @@ export interface UpdateTrainingLogPayload {
   weight?: number;
   reps?: number;
   rest_seconds?: number;
-  rpe?: number | null;
   set_no?: number;
   order_index?: number;
   exercise_order?: number;
@@ -902,7 +899,6 @@ export async function updateTrainingLog(
   if (payload.weight !== undefined) body.weight = payload.weight;
   if (payload.reps !== undefined) body.reps = Math.floor(payload.reps);
   if (payload.rest_seconds !== undefined) body.rest_seconds = Math.floor(payload.rest_seconds);
-  if (payload.rpe !== undefined) body.rpe = payload.rpe;
   if (payload.set_no !== undefined) {
     body.set_no = payload.set_no;
     body.order_index = payload.set_no;
@@ -1161,36 +1157,24 @@ export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSumma
   // Логи по session_id (для backdated-тренировок логи имеют created_at=now, но session_id совпадает)
   const logsRes = await supabase
     .from(TRAINING_LOGS_TABLE)
-    .select('set_volume, rpe, created_at')
+    .select('set_volume, created_at')
     .eq('session_id', sessionId);
   if (logsRes.error) return null;
 
-  const rows = (logsRes.data ?? []) as Array<{
-    set_volume?: number | null;
-    rpe?: number | null;
-    completed_at?: string | null;
-    created_at?: string;
-  }>;
+  const rows = (logsRes.data ?? []) as Array<{ set_volume?: number | null; created_at?: string }>;
   // #region agent log
   if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'api.ts:getWorkoutSummary', message: 'logs in session window', data: { sessionId, started, ended, logsCount: rows.length }, timestamp: Date.now(), hypothesisId: 'H3' }) }).catch(() => {});
   // #endregion
   let tonnageKg = 0;
-  let rpeSum = 0;
-  let rpeCount = 0;
   for (const r of rows) {
     const vol = r.set_volume != null ? Number(r.set_volume) : 0;
     tonnageKg += vol;
-    if (r.rpe != null && Number(r.rpe) > 0) {
-      rpeSum += Number(r.rpe);
-      rpeCount += 1;
-    }
   }
-  const avgRpe = rpeCount > 0 ? rpeSum / rpeCount : null;
   return {
     durationSec,
     tonnageKg: Math.round(tonnageKg * 10) / 10,
     setsCount: rows.length,
-    avgRpe: avgRpe != null ? Math.round(avgRpe * 10) / 10 : null,
+    avgRpe: null,
   };
 }
 
@@ -1299,7 +1283,6 @@ export async function importWorkoutData(
         body_wt_snapshot: r.body_wt_snapshot ?? undefined,
         side_mult: r.side_mult ?? undefined,
         set_volume: r.set_volume ?? undefined,
-        rpe: r.rpe || undefined,
         rest_seconds: r.rest_s || undefined,
         completed_at: r.ts,
       };

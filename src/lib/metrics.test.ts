@@ -98,10 +98,10 @@ function row(overrides: Partial<TrainingMetricRow> & { ts: string; sessionId: st
 }
 
 describe('markWarmupSets', () => {
-  it('marks low RPE or low effective as warmup', () => {
+  it('marks low effective load as warmup', () => {
     const rows: TrainingMetricRow[] = [
-      row({ ts: '2025-01-01T10:00:00Z', sessionId: 's1', rpe: 5, effectiveLoad: 40 }),
-      row({ ts: '2025-01-01T10:05:00Z', sessionId: 's1', rpe: 8, effectiveLoad: 80 }),
+      row({ ts: '2025-01-01T10:00:00Z', sessionId: 's1', effectiveLoad: 40 }),
+      row({ ts: '2025-01-01T10:05:00Z', sessionId: 's1', effectiveLoad: 80 }),
     ];
     const marked = markWarmupSets(rows);
     expect(marked[0].isWarmup).toBe(true);
@@ -161,8 +161,8 @@ describe('computeExerciseBaseline', () => {
     expect(result.baselineWeeklyVolume).toBeNull();
   });
 
-  it('returns nulls when fewer than 6 sessions in selected window', () => {
-    const few = Array.from({ length: 4 }, (_, i) =>
+  it('returns nulls when fewer than 3 sessions in selected window', () => {
+    const few = Array.from({ length: 2 }, (_, i) =>
       row({ ts: `2025-01-0${i + 1}T10:00:00Z`, sessionId: `s${i}` })
     );
     const result = computeExerciseBaseline(few);
@@ -176,26 +176,22 @@ describe('computeFatigueFlag', () => {
       computeFatigueFlag({
         weeklyVolume: 1000,
         baselineWeeklyVolume: null,
-        medianRpe: 8,
-        baselineRpe: 7,
         medianReps: 8,
         baselineReps: 8,
       })
     ).toEqual({ level: 'none', triggered: false, conditionsMet: 0 });
   });
 
-  it('overload when all 3 conditions', () => {
+  it('overload when both conditions (volume up, reps down)', () => {
     const r = computeFatigueFlag({
       weeklyVolume: 1200,
       baselineWeeklyVolume: 1000,
-      medianRpe: 9,
-      baselineRpe: 7,
       medianReps: 6,
       baselineReps: 8,
     });
     expect(r.level).toBe('overload');
     expect(r.triggered).toBe(true);
-    expect(r.conditionsMet).toBe(3);
+    expect(r.conditionsMet).toBe(2);
   });
 });
 

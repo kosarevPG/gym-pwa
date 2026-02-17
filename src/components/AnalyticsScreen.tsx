@@ -119,10 +119,6 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
     () => buildWeeklySeries(selectedExerciseRows, 12),
     [selectedExerciseRows],
   );
-  const selectedMedianRpe = useMemo(
-    () => median(selectedExerciseRows.map((r) => r.rpe)) ?? 0,
-    [selectedExerciseRows],
-  );
   const selectedRampCount = useMemo(
     () => buildRampGaps(selectedExerciseRows).length,
     [selectedExerciseRows],
@@ -259,10 +255,6 @@ export function AnalyticsScreen({ onBack }: AnalyticsScreenProps) {
                     <div className="bg-zinc-800/60 rounded-lg p-2">
                       <p className="text-zinc-400 text-xs">baseline weekly volume (кг)</p>
                       <p>{selectedBaseline.baselineWeeklyVolume != null ? formatInt(Math.round(selectedBaseline.baselineWeeklyVolume)) : '—'}</p>
-                    </div>
-                    <div className="bg-zinc-800/60 rounded-lg p-2">
-                      <p className="text-zinc-400 text-xs">median RPE</p>
-                      <p>{formatDecimal(selectedMedianRpe)}</p>
                     </div>
                     <div className="bg-zinc-800/60 rounded-lg p-2">
                       <p className="text-zinc-400 text-xs">ramp flags count</p>

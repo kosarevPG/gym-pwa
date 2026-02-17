@@ -84,12 +84,6 @@ export function WorkoutSummaryScreen({ sessionId, onGoHome }: WorkoutSummaryScre
             <span className="text-zinc-400">Подходов</span>
             <span className="text-xl font-semibold">{data.setsCount}</span>
           </div>
-          {data.avgRpe != null && data.avgRpe > 0 && (
-            <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-between">
-              <span className="text-zinc-400">Средний RPE</span>
-              <span className="text-xl font-semibold">{data.avgRpe}</span>
-            </div>
-          )}
         </div>
       </div>
 

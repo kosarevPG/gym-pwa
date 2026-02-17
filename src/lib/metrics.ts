@@ -85,9 +85,8 @@ export function calcSetVolumeKg(params: {
   return toNumber(params.effectiveLoad) * Math.max(0, toNumber(params.reps)) * Math.max(1, toNumber(params.sideMult, 1));
 }
 
-export function calcEffectiveVolume(params: { setVolume: number; rpe: number }): number {
-  const rpe = Math.max(0, Math.min(10, toNumber(params.rpe)));
-  return toNumber(params.setVolume) * (rpe / 10);
+export function calcEffectiveVolume(params: { setVolume: number }): number {
+  return toNumber(params.setVolume);
 }
 
 export function median(values: number[]): number | null {
@@ -139,15 +138,13 @@ export function markWarmupSets(rows: TrainingMetricRow[]): Array<TrainingMetricR
         reps: row.reps,
         sideMult,
       });
-      const isWarmup =
-        (row.rpe != null && row.rpe > 0 && row.rpe <= 6) || derivedEffective < 0.6 * maxEffectiveToday;
+      const isWarmup = derivedEffective < 0.6 * maxEffectiveToday;
       out.push({ ...row, isWarmup, derivedEffective, derivedVolume });
     });
   });
 
   // #region agent log
   if (typeof fetch !== 'undefined' && rows.length > 0) {
-    const warmupByRpe = out.filter((r) => r.rpe <= 6).length;
     const nonWarmup = out.filter((r) => !r.isWarmup).length;
     fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005', {
       method: 'POST',
@@ -155,7 +152,7 @@ export function markWarmupSets(rows: TrainingMetricRow[]): Array<TrainingMetricR
       body: JSON.stringify({
         location: 'metrics.ts:markWarmupSets',
         message: 'warmup filter',
-        data: { rowsIn: rows.length, warmupByRpe, nonWarmup, sampleRpe: rows.slice(0, 3).map((r) => r.rpe) },
+        data: { rowsIn: rows.length, nonWarmup },
         timestamp: Date.now(),
         hypothesisId: 'H5',
       }),
@@ -286,7 +283,6 @@ export function computeExerciseBaseline(
 
   const selectedRows = selectedSessionIds.flatMap((sid) => sessions[sid] ?? []);
   const setVolumes = selectedRows.map((r) => r.derivedVolume);
-  const rpeValues = selectedRows.map((r) => r.rpe);
   const repsValues = selectedRows.map((r) => r.reps);
 
   const weeklyMap = computeWeeklyVolume(selectedRows);
@@ -295,7 +291,7 @@ export function computeExerciseBaseline(
   return {
     baselineVolumePerSet: median(setVolumes),
     baselineWeeklyVolume: median(weeklyVolumes),
-    baselineRpe: median(rpeValues),
+    baselineRpe: null,
     baselineReps: median(repsValues),
   };
 }
@@ -303,22 +299,19 @@ export function computeExerciseBaseline(
 export function computeFatigueFlag(params: {
   weeklyVolume: number;
   baselineWeeklyVolume: number | null;
-  medianRpe: number;
-  baselineRpe: number | null;
   medianReps: number;
   baselineReps: number | null;
 }): FatigueResult {
-  if (!params.baselineWeeklyVolume || !params.baselineRpe || !params.baselineReps) {
+  if (!params.baselineWeeklyVolume || !params.baselineReps) {
     return { level: 'none', triggered: false, conditionsMet: 0 };
   }
 
   const c1 = params.weeklyVolume >= params.baselineWeeklyVolume * 1.1;
-  const c2 = params.medianRpe >= params.baselineRpe + 1;
-  const c3 = params.medianReps <= params.baselineReps - 1;
-  const conditionsMet = [c1, c2, c3].filter(Boolean).length;
+  const c2 = params.medianReps <= params.baselineReps - 1;
+  const conditionsMet = [c1, c2].filter(Boolean).length;
 
-  if (conditionsMet === 3) return { level: 'overload', triggered: true, conditionsMet };
-  if (conditionsMet === 2) return { level: 'warning', triggered: true, conditionsMet };
+  if (conditionsMet === 2) return { level: 'overload', triggered: true, conditionsMet };
+  if (conditionsMet === 1) return { level: 'warning', triggered: true, conditionsMet };
   return { level: 'none', triggered: false, conditionsMet };
 }
 
