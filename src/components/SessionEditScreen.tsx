@@ -335,7 +335,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     }
     const { error } = await batchUpdateTrainingLogs(updates);
     if (error) alert(error.message);
-    else loadSession();
+    else loadSession(true);
   };
 
   const handleSplitFromSuperset = async (exId: string) => {
@@ -344,7 +344,43 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     const updates = toUpdate.map((r) => ({ id: r.id, payload: { set_group_id: newGroupId } }));
     const { error } = await batchUpdateTrainingLogs(updates);
     if (error) alert(error.message);
-    else loadSession();
+    else loadSession(true);
+  };
+
+  const handleMoveRunUp = async (runIdx: number) => {
+    if (runIdx <= 0) return;
+    const curRun = runs[runIdx];
+    const prevRun = runs[runIdx - 1];
+    const curOrder = byExercise.get(curRun.exIds[0])![0].exercise_order;
+    const prevOrder = byExercise.get(prevRun.exIds[0])![0].exercise_order;
+    const updates: { id: string; payload: { exercise_order: number } }[] = [];
+    curRun.exIds.forEach((exId) =>
+      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: prevOrder } }))
+    );
+    prevRun.exIds.forEach((exId) =>
+      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: curOrder } }))
+    );
+    const { error } = await batchUpdateTrainingLogs(updates);
+    if (error) alert(error.message);
+    else loadSession(true);
+  };
+
+  const handleMoveRunDown = async (runIdx: number) => {
+    if (runIdx < 0 || runIdx >= runs.length - 1) return;
+    const curRun = runs[runIdx];
+    const nextRun = runs[runIdx + 1];
+    const curOrder = byExercise.get(curRun.exIds[0])![0].exercise_order;
+    const nextOrder = byExercise.get(nextRun.exIds[0])![0].exercise_order;
+    const updates: { id: string; payload: { exercise_order: number } }[] = [];
+    curRun.exIds.forEach((exId) =>
+      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: nextOrder } }))
+    );
+    nextRun.exIds.forEach((exId) =>
+      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: curOrder } }))
+    );
+    const { error } = await batchUpdateTrainingLogs(updates);
+    if (error) alert(error.message);
+    else loadSession(true);
   };
 
   const handleMoveSetUp = async (rowId: string) => {
@@ -425,20 +461,44 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
             <div key={run.superset ? `superset-${runIdx}` : `solo-${runIdx}`} className="space-y-2">
               {run.superset ? (
                 <div className="rounded-xl border-l-4 border-blue-500 bg-blue-500/5 pl-3 pr-2 py-2 space-y-3">
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 text-blue-400 text-xs font-semibold uppercase tracking-wider">
                       <Link2 className="w-4 h-4 flex-shrink-0" />
                       СУПЕРСЕТ
                     </div>
-                    {runIdx < runs.length - 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleMergeWithNext(runIdx)}
-                        className="text-xs text-zinc-500 hover:text-zinc-300"
-                      >
-                        Объединить со следующим
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1">
+                      {runIdx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleMoveRunUp(runIdx)}
+                          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"
+                          aria-label="Поднять блок"
+                          title="Поднять блок упражнений"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                      )}
+                      {runIdx < runs.length - 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveRunDown(runIdx)}
+                            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"
+                            aria-label="Опустить блок"
+                            title="Опустить блок упражнений"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMergeWithNext(runIdx)}
+                            className="text-xs text-zinc-500 hover:text-zinc-300 px-2 py-1 rounded hover:bg-zinc-800"
+                          >
+                            Объединить со следующим
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   {run.exIds.map((exId) => (
                     <ExerciseBlock
@@ -454,10 +514,9 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
                       onMoveUp={() => handleMoveExerciseUp(exId)}
                       onMoveDown={() => handleMoveExerciseDown(exId)}
                       onSplitFromSuperset={
-                        run.superset && run.exIds.length > 1
-                          ? () => handleSplitFromSuperset(exId)
-                          : undefined
+                        run.superset ? () => handleSplitFromSuperset(exId) : undefined
                       }
+                      splitLabel={run.exIds.length === 1 ? 'Убрать метку суперсета' : undefined}
                       canMoveUp={orderedExIds.indexOf(exId) > 0}
                       canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
                       onMoveSetUp={handleMoveSetUp}
@@ -587,6 +646,7 @@ interface ExerciseBlockProps {
   onMoveUp: () => void;
   onMoveDown: () => void;
   onSplitFromSuperset?: () => void;
+  splitLabel?: string;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMoveSetUp: (rowId: string) => void;
@@ -605,6 +665,7 @@ function ExerciseBlock({
   onMoveUp,
   onMoveDown,
   onSplitFromSuperset,
+  splitLabel,
   canMoveUp,
   canMoveDown,
   onMoveSetUp,
@@ -650,10 +711,10 @@ function ExerciseBlock({
               type="button"
               onClick={onSplitFromSuperset}
               className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 flex items-center gap-1"
-              title="Разъединить из суперсета"
+              title={splitLabel ?? 'Разъединить из суперсета'}
             >
               <Unlink className="w-4 h-4" />
-              <span className="text-xs">Разъединить</span>
+              <span className="text-xs">{splitLabel ?? 'Разъединить'}</span>
             </button>
           )}
           <button
