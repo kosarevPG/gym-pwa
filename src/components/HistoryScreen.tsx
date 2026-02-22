@@ -389,14 +389,16 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
                         byExercise.get(r.exercise_id)!.push(r);
                       });
                       // Старый → Новый: первое выполненное сверху, последнее — снизу
-                      const exerciseOrder = [...byExercise.keys()].sort((a, b) => {
-                        const orderA = byExercise.get(a)![0].exercise_order ?? 0;
-                        const orderB = byExercise.get(b)![0].exercise_order ?? 0;
-                        if (orderA !== orderB) return orderA - orderB;
-                        const tsA = Math.min(...byExercise.get(a)!.map((r) => new Date(r.ts).getTime()));
-                        const tsB = Math.min(...byExercise.get(b)!.map((r) => new Date(r.ts).getTime()));
-                        return tsA - tsB;
-                      });
+                      const exerciseOrder = [...byExercise.keys()]
+                        .sort((a, b) => {
+                          const orderA = byExercise.get(a)![0].exercise_order ?? 0;
+                          const orderB = byExercise.get(b)![0].exercise_order ?? 0;
+                          if (orderA !== orderB) return orderA - orderB;
+                          const tsA = Math.min(...byExercise.get(a)!.map((r) => new Date(r.ts).getTime()));
+                          const tsB = Math.min(...byExercise.get(b)!.map((r) => new Date(r.ts).getTime()));
+                          return tsA - tsB;
+                        })
+                        .reverse();
                       const runs: { superset: boolean; exIds: string[] }[] = [];
                       let current: { superset: boolean; exIds: string[] } | null = null;
                       for (const exId of exerciseOrder) {
