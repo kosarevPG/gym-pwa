@@ -58,17 +58,15 @@ function buildRuns(rows: TrainingLogRaw[]) {
     if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
     byExercise.get(r.exercise_id)!.push(r);
   });
-  // Старый → Новый: первое выполненное сверху, последнее — снизу
-  const exerciseOrder = [...byExercise.keys()]
-    .sort((a, b) => {
-      const orderA = byExercise.get(a)![0].exercise_order ?? 0;
-      const orderB = byExercise.get(b)![0].exercise_order ?? 0;
-      if (orderA !== orderB) return orderA - orderB;
-      const tsA = Math.min(...byExercise.get(a)!.map((r) => new Date(r.ts).getTime()));
-      const tsB = Math.min(...byExercise.get(b)!.map((r) => new Date(r.ts).getTime()));
-      return tsA - tsB;
-    })
-    .reverse();
+  // Старый → Новый: первое выполненное сверху (order 0), последнее — снизу
+  const exerciseOrder = [...byExercise.keys()].sort((a, b) => {
+    const orderA = byExercise.get(a)![0].exercise_order ?? 0;
+    const orderB = byExercise.get(b)![0].exercise_order ?? 0;
+    if (orderA !== orderB) return orderA - orderB;
+    const tsA = Math.min(...byExercise.get(a)!.map((r) => new Date(r.ts).getTime()));
+    const tsB = Math.min(...byExercise.get(b)!.map((r) => new Date(r.ts).getTime()));
+    return tsA - tsB;
+  });
 
   const runs: { superset: boolean; exIds: string[] }[] = [];
   let current: { superset: boolean; exIds: string[] } | null = null;
@@ -298,32 +296,42 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
 
   const orderedExIds = useMemo(() => runs.flatMap((r) => r.exIds), [runs]);
 
-  const handleMoveExerciseUp = async (exId: string) => {
-    const idx = orderedExIds.indexOf(exId);
-    if (idx <= 0) return;
-    const prevId = orderedExIds[idx - 1];
-    const prevOrder = byExercise.get(prevId)![0].exercise_order;
-    const curOrder = byExercise.get(exId)![0].exercise_order;
+  /** Переприсвоить exercise_order по порядку 0,1,2... — устраняет дубли и сбои при смене порядка */
+  const applyExerciseOrder = async (newOrderedIds: string[]) => {
     const updates: { id: string; payload: { exercise_order: number } }[] = [];
-    byExercise.get(prevId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: curOrder } }));
-    byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: prevOrder } }));
+    newOrderedIds.forEach((exId, idx) => {
+      byExercise.get(exId)?.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: idx } }));
+    });
+    if (updates.length === 0) return;
     const { error } = await batchUpdateTrainingLogs(updates);
     if (error) alert(error.message);
     else loadSession(true);
   };
 
+  const handleMoveExerciseUp = async (exId: string) => {
+    const idx = orderedExIds.indexOf(exId);
+    if (idx <= 0) return;
+    const newOrder = [...orderedExIds];
+    [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+    await applyExerciseOrder(newOrder);
+  };
+
   const handleMoveExerciseDown = async (exId: string) => {
     const idx = orderedExIds.indexOf(exId);
     if (idx < 0 || idx >= orderedExIds.length - 1) return;
-    const nextId = orderedExIds[idx + 1];
-    const nextOrder = byExercise.get(nextId)![0].exercise_order;
-    const curOrder = byExercise.get(exId)![0].exercise_order;
-    const updates: { id: string; payload: { exercise_order: number } }[] = [];
-    byExercise.get(nextId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: curOrder } }));
-    byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: nextOrder } }));
-    const { error } = await batchUpdateTrainingLogs(updates);
-    if (error) alert(error.message);
-    else loadSession(true);
+    const newOrder = [...orderedExIds];
+    [newOrder[idx], newOrder[idx + 1]] = [newOrder[idx + 1], newOrder[idx]];
+    await applyExerciseOrder(newOrder);
+  };
+
+  const handleSetExerciseOrder = async (exId: string, newPos1Based: number) => {
+    const idx = orderedExIds.indexOf(exId);
+    if (idx < 0) return;
+    const newIdx = Math.max(0, Math.min(orderedExIds.length - 1, newPos1Based - 1));
+    if (newIdx === idx) return;
+    const newOrder = orderedExIds.filter((id) => id !== exId);
+    newOrder.splice(newIdx, 0, exId);
+    await applyExerciseOrder(newOrder);
   };
 
   const handleMergeWithNext = async (runIdx: number) => {
@@ -354,38 +362,28 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
 
   const handleMoveRunUp = async (runIdx: number) => {
     if (runIdx <= 0) return;
-    const curRun = runs[runIdx];
-    const prevRun = runs[runIdx - 1];
-    const curOrder = byExercise.get(curRun.exIds[0])![0].exercise_order;
-    const prevOrder = byExercise.get(prevRun.exIds[0])![0].exercise_order;
-    const updates: { id: string; payload: { exercise_order: number } }[] = [];
-    curRun.exIds.forEach((exId) =>
-      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: prevOrder } }))
-    );
-    prevRun.exIds.forEach((exId) =>
-      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: curOrder } }))
-    );
-    const { error } = await batchUpdateTrainingLogs(updates);
-    if (error) alert(error.message);
-    else loadSession(true);
+    const newOrder = [...orderedExIds];
+    const prevRunExIds = runs[runIdx - 1].exIds;
+    const curRunExIds = runs[runIdx].exIds;
+    const prevStart = newOrder.indexOf(prevRunExIds[0]);
+    const curStart = newOrder.indexOf(curRunExIds[0]);
+    const prevBlock = newOrder.slice(prevStart, prevStart + prevRunExIds.length);
+    const curBlock = newOrder.slice(curStart, curStart + curRunExIds.length);
+    newOrder.splice(prevStart, prevBlock.length + curBlock.length, ...curBlock, ...prevBlock);
+    await applyExerciseOrder(newOrder);
   };
 
   const handleMoveRunDown = async (runIdx: number) => {
     if (runIdx < 0 || runIdx >= runs.length - 1) return;
-    const curRun = runs[runIdx];
-    const nextRun = runs[runIdx + 1];
-    const curOrder = byExercise.get(curRun.exIds[0])![0].exercise_order;
-    const nextOrder = byExercise.get(nextRun.exIds[0])![0].exercise_order;
-    const updates: { id: string; payload: { exercise_order: number } }[] = [];
-    curRun.exIds.forEach((exId) =>
-      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: nextOrder } }))
-    );
-    nextRun.exIds.forEach((exId) =>
-      byExercise.get(exId)!.forEach((r) => updates.push({ id: r.id, payload: { exercise_order: curOrder } }))
-    );
-    const { error } = await batchUpdateTrainingLogs(updates);
-    if (error) alert(error.message);
-    else loadSession(true);
+    const newOrder = [...orderedExIds];
+    const curRunExIds = runs[runIdx].exIds;
+    const nextRunExIds = runs[runIdx + 1].exIds;
+    const curStart = newOrder.indexOf(curRunExIds[0]);
+    const nextStart = newOrder.indexOf(nextRunExIds[0]);
+    const curBlock = newOrder.slice(curStart, curStart + curRunExIds.length);
+    const nextBlock = newOrder.slice(nextStart, nextStart + nextRunExIds.length);
+    newOrder.splice(curStart, curBlock.length + nextBlock.length, ...nextBlock, ...curBlock);
+    await applyExerciseOrder(newOrder);
   };
 
   const handleMoveSetUp = async (rowId: string) => {
@@ -512,6 +510,9 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
                       sets={byExercise.get(exId)!.sort((a, b) => a.set_no - b.set_no)}
                       exerciseMap={exerciseMap}
                       sessionId={sessionId}
+                      orderNum={orderedExIds.indexOf(exId) + 1}
+                      orderTotal={orderedExIds.length}
+                      onOrderChange={(n) => handleSetExerciseOrder(exId, n)}
                       onUpdateSet={handleUpdateSet}
                       onDeleteSet={handleDeleteSet}
                       onAddSet={handleAddSet}
@@ -549,6 +550,9 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
                       sets={byExercise.get(exId)!.sort((a, b) => a.set_no - b.set_no)}
                       exerciseMap={exerciseMap}
                       sessionId={sessionId}
+                      orderNum={orderedExIds.indexOf(exId) + 1}
+                      orderTotal={orderedExIds.length}
+                      onOrderChange={(n) => handleSetExerciseOrder(exId, n)}
                       onUpdateSet={handleUpdateSet}
                       onDeleteSet={handleDeleteSet}
                       onAddSet={handleAddSet}
@@ -644,6 +648,9 @@ interface ExerciseBlockProps {
   sets: TrainingLogRaw[];
   exerciseMap: Map<string, Exercise>;
   sessionId: string;
+  orderNum: number;
+  orderTotal: number;
+  onOrderChange: (newPos1Based: number) => void;
   onUpdateSet: (id: string, patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
   onDeleteSet: (id: string) => void;
   onAddSet: (exerciseId: string, setGroupId: string, exerciseOrder: number) => void;
@@ -663,6 +670,9 @@ function ExerciseBlock({
   sets,
   exerciseMap,
   sessionId,
+  orderNum,
+  orderTotal,
+  onOrderChange,
   onUpdateSet,
   onDeleteSet,
   onAddSet,
@@ -682,14 +692,35 @@ function ExerciseBlock({
   const setGroupId = sets[0]?.set_group_id ?? '';
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [orderInput, setOrderInput] = useState(String(orderNum));
+  useEffect(() => {
+    setOrderInput(String(orderNum));
+  }, [orderNum]);
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="font-medium text-white text-sm">
-          {nameRu}
-          {nameEn ? ` / ${nameEn}` : ''}
-        </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-zinc-500 text-xs shrink-0">№</span>
+          <input
+            type="number"
+            min={1}
+            max={orderTotal}
+            value={orderInput}
+            onChange={(e) => setOrderInput(e.target.value)}
+            onBlur={() => {
+              const n = parseInt(orderInput, 10);
+              if (n >= 1 && n <= orderTotal) onOrderChange(n);
+              setOrderInput(String(orderNum));
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            className="w-10 text-center text-sm bg-zinc-800 border border-zinc-600 rounded px-1 py-0.5 text-white"
+          />
+          <p className="font-medium text-white text-sm">
+            {nameRu}
+            {nameEn ? ` / ${nameEn}` : ''}
+          </p>
+        </div>
         <div className="flex items-center gap-1">
           {canMoveUp && (
             <button
