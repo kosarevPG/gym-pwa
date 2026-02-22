@@ -49,9 +49,7 @@ function calcTotalKg(
   if (inputStr === '' || isNaN(input)) return null;
   const formula = WEIGHT_FORMULAS[weightType];
   const base = baseWeight ?? (weightType === 'barbell' ? 20 : 0);
-  const mult =
-    weightMultiplier ??
-    (weightType === 'barbell' || weightType === 'plate_loaded' ? 2 : 1);
+  const mult = weightMultiplier ?? (weightType === 'barbell' || weightType === 'plate_loaded' ? 2 : 1);
   return formula.toEffective(input, userBodyWeight, base, mult);
 }
 
@@ -390,13 +388,14 @@ export function ExerciseDetailScreen({
         if (!s || (!s.completed && !s.inputWeight && !s.reps)) return;
         const wtType = getWeightType(block.exercise);
         const logWeightMult =
-          (wtType === 'barbell' ||
-            wtType === 'plate_loaded' ||
-            wtType === 'dumbbell' ||
-            wtType === 'machine' ||
-            wtType === 'standard') &&
-          block.exercise.simultaneous
-            ? 2
+          wtType === 'barbell' ||
+          wtType === 'plate_loaded' ||
+          wtType === 'dumbbell' ||
+          wtType === 'machine' ||
+          wtType === 'standard'
+            ? block.exercise.simultaneous
+              ? 2
+              : 1
             : undefined;
         const totalKg = calcTotalKg(s.inputWeight, wtType, block.exercise.baseWeight, bodyWeight ?? undefined, logWeightMult) ?? 0;
         const rps = parseInt(s.reps) || 0;
@@ -521,15 +520,16 @@ export function ExerciseDetailScreen({
                   swipeState?.setId === set.id ? swipeState.offset : revealedDeleteSetId === set.id ? -80 : 0;
                 const canSwipeDelete = block.sets.length > 1;
 
-                // Расчет эффективной нагрузки для отображения (x2 при simultaneous: штанга, гантели, тренажёр и т.д.)
+                // simultaneous: 2 = ввод «на одну сторону» (×2), 1 = ввод «суммарно» (+база). Для штанги без галочки — суммарный вес блинов.
                 const weightMult =
-                  (weightType === 'barbell' ||
-                    weightType === 'plate_loaded' ||
-                    weightType === 'dumbbell' ||
-                    weightType === 'machine' ||
-                    weightType === 'standard') &&
-                  block.exercise.simultaneous
-                    ? 2
+                  weightType === 'barbell' ||
+                  weightType === 'plate_loaded' ||
+                  weightType === 'dumbbell' ||
+                  weightType === 'machine' ||
+                  weightType === 'standard'
+                    ? block.exercise.simultaneous
+                      ? 2
+                      : 1
                     : undefined;
                 const effectiveKg = calcTotalKg(
                   set.inputWeight,
