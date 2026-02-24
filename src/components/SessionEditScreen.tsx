@@ -113,12 +113,24 @@ export function SessionEditScreen({
       setExercises(exList);
       setLoading(false);
 
-      const initiallyDone = new Set<string>();
-      logList.forEach((r) => {
-        const hasLoad = (r.effective_load ?? r.input_wt ?? 0) > 0;
-        if (r.reps > 0 && hasLoad) initiallyDone.add(r.id);
+      const rowIds = new Set(logList.map((r) => r.id));
+      setDoneSets((prev) => {
+        const next = new Set<string>();
+        // сохраняем только те галочки, для которых ещё есть строки
+        prev.forEach((id) => {
+          if (rowIds.has(id)) next.add(id);
+        });
+
+        // для прошедших тренировок (есть дата) можно автопометить «сделанными» старые подходы
+        if (sessionDate) {
+          logList.forEach((r) => {
+            const hasLoad = (r.effective_load ?? r.input_wt ?? 0) > 0;
+            if (r.reps > 0 && hasLoad) next.add(r.id);
+          });
+        }
+
+        return next;
       });
-      setDoneSets((prev) => new Set([...prev, ...initiallyDone]));
 
       // #region agent log
       if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:loadSession',message:'session state set',data:{sessionId,rowsCount:logList.length},timestamp:Date.now(),hypothesisId:'H1,H5'})}).catch(()=>{});
@@ -289,7 +301,7 @@ export function SessionEditScreen({
         exercise_id: exerciseId,
         weight: defaultEffective,
         reps: defaultReps,
-        order_index: sessionRows.length,
+        order_index: maxSetNo - 1,
         set_no: maxSetNo,
         exercise_order: exerciseOrder,
         input_wt: defaultWeight,
@@ -366,7 +378,7 @@ export function SessionEditScreen({
             exercise_id: exerciseId,
             weight: set.effective_load,
             reps: set.reps,
-            order_index: sessionRows.length + i,
+            order_index: i,
             set_no: i + 1,
             exercise_order: maxOrder,
             input_wt: set.input_wt,
@@ -381,7 +393,7 @@ export function SessionEditScreen({
               exercise_id: exerciseId,
               weight: 0,
               reps: 0,
-              order_index: sessionRows.length,
+              order_index: 0,
               set_no: 1,
               exercise_order: maxOrder,
               input_wt: 0,
