@@ -103,6 +103,7 @@ export function SessionEditScreen({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
+  const [newlyAddedExIds, setNewlyAddedExIds] = useState<Set<string>>(new Set());
   const didOpenAddExerciseOnMount = useRef(false);
   /** При входе после «Завершить упражнение» показываем блоки свернутыми, чтобы было видно список. */
   const defaultCollapseBlocks = useRef(!!openAddExerciseOnMount).current;
@@ -315,6 +316,7 @@ export function SessionEditScreen({
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleAddExercise',message:'add exercise success',data:{exerciseId},timestamp:Date.now(),hypothesisId:'H4,H5'})}).catch(()=>{});
     // #endregion
+    setNewlyAddedExIds((prev) => new Set(prev).add(exerciseId));
     setAddExerciseOpen(false);
     loadSession();
     const addedEx = exerciseMap.get(exerciseId);
@@ -555,7 +557,7 @@ export function SessionEditScreen({
                       onMoveSetUp={handleMoveSetUp}
                       onMoveSetDown={handleMoveSetDown}
                       onFinishExercise={() => setAddExerciseOpen(true)}
-                      defaultCollapsed={defaultCollapseBlocks}
+                      defaultCollapsed={newlyAddedExIds.has(exId) ? false : defaultCollapseBlocks}
                     />
                   ))}
                 </div>
@@ -594,7 +596,7 @@ export function SessionEditScreen({
                       onMoveSetUp={handleMoveSetUp}
                       onMoveSetDown={handleMoveSetDown}
                       onFinishExercise={() => setAddExerciseOpen(true)}
-                      defaultCollapsed={defaultCollapseBlocks}
+                      defaultCollapsed={newlyAddedExIds.has(exId) ? false : defaultCollapseBlocks}
                     />
                   ))}
                 </div>

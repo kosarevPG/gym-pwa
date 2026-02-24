@@ -212,12 +212,6 @@ export default function App() {
         }}
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
         onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
-        onAfterAddExercise={sessionEditFromWorkout ? (exercise) => {
-          const category = getCategoryBySlug(exercise.category) ?? { slug: exercise.category, name: exercise.category };
-          setSelectedExercise(exercise);
-          setLastExerciseInSession({ exercise, category });
-          setScreen('exercise-detail');
-        } : undefined}
       />
     );
   }
