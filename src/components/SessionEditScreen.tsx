@@ -104,6 +104,8 @@ export function SessionEditScreen({
   const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
   const didOpenAddExerciseOnMount = useRef(false);
+  /** При входе после «Завершить упражнение» показываем блоки свернутыми, чтобы было видно список. */
+  const defaultCollapseBlocks = useRef(!!openAddExerciseOnMount).current;
 
   const loadSession = (silent = false) => {
     if (!silent) setLoading(true);
@@ -553,6 +555,7 @@ export function SessionEditScreen({
                       onMoveSetUp={handleMoveSetUp}
                       onMoveSetDown={handleMoveSetDown}
                       onFinishExercise={() => setAddExerciseOpen(true)}
+                      defaultCollapsed={defaultCollapseBlocks}
                     />
                   ))}
                 </div>
@@ -591,6 +594,7 @@ export function SessionEditScreen({
                       onMoveSetUp={handleMoveSetUp}
                       onMoveSetDown={handleMoveSetDown}
                       onFinishExercise={() => setAddExerciseOpen(true)}
+                      defaultCollapsed={defaultCollapseBlocks}
                     />
                   ))}
                 </div>
@@ -691,6 +695,8 @@ interface ExerciseBlockProps {
   onMoveSetUp: (rowId: string) => void;
   onMoveSetDown: (rowId: string) => void;
   onFinishExercise?: () => void;
+  /** Показать блок свернутым по умолчанию (после «Завершить упражнение»). */
+  defaultCollapsed?: boolean;
 }
 
 function ExerciseBlock({
@@ -714,8 +720,9 @@ function ExerciseBlock({
   onMoveSetUp,
   onMoveSetDown,
   onFinishExercise,
+  defaultCollapsed,
 }: ExerciseBlockProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(!!defaultCollapsed);
   const ex = exerciseMap.get(exerciseId);
   const nameRu = ex?.nameRu ?? exerciseId;
   const nameEn = ex?.nameEn;
