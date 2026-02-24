@@ -139,8 +139,9 @@ export function ExerciseDetailScreen({
   ]);
   const [saving, setSaving] = useState(false);
   const [restCountdownSec, setRestCountdownSec] = useState(0);
-  const [stopwatchSec, setStopwatchSec] = useState(0);
-  const [stopwatchRunning, setStopwatchRunning] = useState(false);
+  /** Время старта секундомера (ms). null = остановлен. При каждом тике считаем Date.now() - stopwatchStartedAt для точности при сворачивании. */
+  const [stopwatchStartedAt, setStopwatchStartedAt] = useState<number | null>(null);
+  const [stopwatchElapsedMs, setStopwatchElapsedMs] = useState(0);
 
   const [historyRows, setHistoryRows] = useState<ExerciseHistoryRow[]>([]);
   const [lastSnapshot, setLastSnapshot] = useState<{ createdAt: string; weight: number; reps: number } | null>(null);
@@ -253,10 +254,15 @@ export function ExerciseDetailScreen({
   }, [restCountdownSec]);
 
   useEffect(() => {
-    if (!stopwatchRunning) return;
-    const interval = setInterval(() => setStopwatchSec((s) => s + 1), 1000);
+    if (!stopwatchStartedAt) {
+      setStopwatchElapsedMs(0);
+      return;
+    }
+    const tick = () => setStopwatchElapsedMs(Math.max(0, Date.now() - stopwatchStartedAt));
+    tick();
+    const interval = setInterval(tick, 50);
     return () => clearInterval(interval);
-  }, [stopwatchRunning]);
+  }, [stopwatchStartedAt]);
 
   useEffect(() => {
     if (!addSetPickerOpen) return;
@@ -440,10 +446,19 @@ export function ExerciseDetailScreen({
   };
 
   // --- RENDER HELPERS ---
+  /** Обратный отсчёт отдыха: минуты:секунды */
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+  /** Секундомер: минуты:секунды:сотые — точный при сворачивании приложения */
+  const formatElapsedMs = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const hundredths = Math.floor((ms % 1000) / 10);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}:${hundredths.toString().padStart(2, '0')}`;
   };
 
   // Получаем "Пред. результат" для конкретного сета из истории (упрощенно: берем последний снапшот)
@@ -476,25 +491,24 @@ export function ExerciseDetailScreen({
                 setRestCountdownSec(0);
                 return;
               }
-              if (stopwatchRunning) {
-                setStopwatchRunning(false);
-                setStopwatchSec(0);
+              if (stopwatchStartedAt !== null) {
+                setStopwatchStartedAt(null);
+                setStopwatchElapsedMs(0);
               } else {
-                setStopwatchSec(0);
-                setStopwatchRunning(true);
+                setStopwatchStartedAt(Date.now());
               }
             }}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-mono text-base font-semibold transition-all min-w-[4.5rem] justify-center ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-mono text-base font-semibold transition-all min-w-[5rem] justify-center ${
               restCountdownSec > 0
                 ? 'bg-emerald-600/80 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-900/40'
-                : stopwatchRunning || stopwatchSec > 0
+                : stopwatchStartedAt !== null || stopwatchElapsedMs > 0
                   ? 'bg-emerald-600/70 text-white border border-emerald-500/50'
                   : 'bg-zinc-800 text-zinc-400 border border-zinc-600 hover:bg-zinc-700 hover:text-zinc-300'
             }`}
-            title={restCountdownSec > 0 ? 'Остановить отдых' : stopwatchRunning ? 'Стоп (сброс)' : 'Старт (с 0:00)'}
+            title={restCountdownSec > 0 ? 'Остановить отдых' : stopwatchStartedAt !== null ? 'Стоп (сброс)' : 'Старт (с 0:00:00)'}
           >
             <Timer className="w-5 h-5 flex-shrink-0" />
-            <span>{restCountdownSec > 0 ? formatTime(restCountdownSec) : formatTime(stopwatchSec)}</span>
+            <span>{restCountdownSec > 0 ? formatTime(restCountdownSec) : formatElapsedMs(stopwatchElapsedMs)}</span>
           </button>
           <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 rounded-full hover:bg-zinc-800">
             <MoreVertical className="w-5 h-5 text-zinc-400" />
