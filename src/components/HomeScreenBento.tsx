@@ -39,10 +39,11 @@ interface HomeScreenBentoProps {
 }
 
 function formatElapsed(ms: number): string {
-  const sec = Math.floor(ms / 1000);
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hundredths = Math.floor((ms % 1000) / 10);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}:${hundredths.toString().padStart(2, '0')}`;
 }
 
 /** Текущая неделя Пн–Вс: массив { day, date, dateStr, status }. Используем локальные даты, чтобы точки не сдвигались (UTC давал ВТ ЧТ ВС вместо ПН СР СБ). */
@@ -145,9 +146,13 @@ export function HomeScreenBento({
     } catch (_) {
       started = new Date(activeSession.started_at).getTime();
     }
-    const tick = () => setElapsedMs(Math.max(0, Date.now() - started));
+
+    const tick = () => {
+      setElapsedMs(Math.max(0, Date.now() - started));
+    };
+
     tick();
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(tick, 50);
     return () => clearInterval(interval);
   }, [activeSession]);
 

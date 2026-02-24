@@ -40,10 +40,11 @@ interface HomeScreenProps {
 }
 
 function formatElapsed(ms: number): string {
-  const sec = Math.floor(ms / 1000);
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hundredths = Math.floor((ms % 1000) / 10);
+  return `${minutes}:${seconds.toString().padStart(2, '0')}:${hundredths.toString().padStart(2, '0')}`;
 }
 
 export function HomeScreen({
@@ -83,7 +84,8 @@ export function HomeScreen({
     };
   }, []);
 
-  // Таймер «Идёт тренировка» — для backdated-сессии считаем от openedAt, иначе от started_at из БД
+  // Таймер «Идёт тренировка» — для backdated-сессии считаем от openedAt, иначе от started_at из БД.
+  // При каждом тике пересчитываем разницу от started, чтобы при возврате из свёрнутого приложения время было точным.
   useEffect(() => {
     if (!activeSession) return;
     let started: number;
@@ -98,9 +100,13 @@ export function HomeScreen({
     } catch (_) {
       started = new Date(activeSession.started_at).getTime();
     }
-    const tick = () => setElapsedMs(Math.max(0, Date.now() - started));
+
+    const tick = () => {
+      setElapsedMs(Math.max(0, Date.now() - started));
+    };
+
     tick();
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(tick, 50);
     return () => clearInterval(interval);
   }, [activeSession]);
 
