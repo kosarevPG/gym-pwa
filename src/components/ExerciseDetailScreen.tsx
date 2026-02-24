@@ -138,7 +138,9 @@ export function ExerciseDetailScreen({
     { id: crypto.randomUUID(), exercise, sets: [createSetForExercise(exercise, 1)] },
   ]);
   const [saving, setSaving] = useState(false);
-  const [restCountdownSec, setRestCountdownSec] = useState(0);
+  /** Время окончания отдыха (ms). null = отдых не идёт. Оставшееся время считаем как restEndAt - Date.now(), тик каждые 50ms — сотые бегут. */
+  const [restEndAt, setRestEndAt] = useState<number | null>(null);
+  const [restRemainingMs, setRestRemainingMs] = useState(0);
   /** Время старта секундомера (ms). null = остановлен. При каждом тике считаем Date.now() - stopwatchStartedAt для точности при сворачивании. */
   const [stopwatchStartedAt, setStopwatchStartedAt] = useState<number | null>(null);
   const [stopwatchElapsedMs, setStopwatchElapsedMs] = useState(0);
@@ -248,10 +250,19 @@ export function ExerciseDetailScreen({
   }, [sessionId, exercise.id, hasDraftData, blocks]);
 
   useEffect(() => {
-    if (restCountdownSec <= 0) return;
-    const interval = setInterval(() => setRestCountdownSec(prev => Math.max(0, prev - 1)), 1000);
+    if (restEndAt === null) {
+      setRestRemainingMs(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, restEndAt - Date.now());
+      setRestRemainingMs(remaining);
+      if (remaining <= 0) setRestEndAt(null);
+    };
+    tick();
+    const interval = setInterval(tick, 50);
     return () => clearInterval(interval);
-  }, [restCountdownSec]);
+  }, [restEndAt]);
 
   useEffect(() => {
     if (!stopwatchStartedAt) {
@@ -341,20 +352,25 @@ export function ExerciseDetailScreen({
 
     updateSetInBlock(blockId, setId, { completed: isCompleting, doneAt: isCompleting ? now : undefined });
 
-    if (isCompleting) {
+      if (isCompleting) {
       onEnsureSession?.().catch(() => {});
       if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
       const isLastSet = setIndex === block.sets.length - 1;
       if (isLastSet) {
-        setRestCountdownSec(0);
+        setRestEndAt(null);
+        setRestRemainingMs(0);
       } else {
         const restSec = (parseFloat(set.restMin) || 0) * 60;
-        if (restSec > 0) setRestCountdownSec(restSec);
+        if (restSec > 0) {
+          setRestEndAt(Date.now() + restSec * 1000);
+          setRestRemainingMs(restSec * 1000);
+        }
       }
       const nextSet = block.sets[setIndex + 1];
       if (nextSet) setInputRefs.current[`${nextSet.id}-weight`]?.focus();
     } else {
-      setRestCountdownSec(0);
+      setRestEndAt(null);
+      setRestRemainingMs(0);
     }
   };
 
@@ -446,11 +462,13 @@ export function ExerciseDetailScreen({
   };
 
   // --- RENDER HELPERS ---
-  /** Обратный отсчёт отдыха: минуты:секунды:сотые (сотые = 00, т.к. отсчёт в целых секундах) — единый формат 0:00:00 */
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m}:${s.toString().padStart(2, '0')}:00`;
+  /** Обратный отсчёт: оставшиеся ms в формате M:SS:HH (сотые реально бегут) */
+  const formatCountdownMs = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const hundredths = Math.floor((ms % 1000) / 10);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}:${hundredths.toString().padStart(2, '0')}`;
   };
   /** Секундомер: минуты:секунды:сотые — точный при сворачивании приложения */
   const formatElapsedMs = (ms: number) => {
@@ -487,8 +505,9 @@ export function ExerciseDetailScreen({
           <button
             type="button"
             onClick={() => {
-              if (restCountdownSec > 0) {
-                setRestCountdownSec(0);
+              if (restEndAt !== null && restRemainingMs > 0) {
+                setRestEndAt(null);
+                setRestRemainingMs(0);
                 return;
               }
               if (stopwatchStartedAt !== null) {
@@ -499,16 +518,16 @@ export function ExerciseDetailScreen({
               }
             }}
             className={`flex items-center gap-2 px-3 py-2 rounded-xl font-mono text-base font-semibold transition-all min-w-[5rem] justify-center ${
-              restCountdownSec > 0
+              restEndAt !== null && restRemainingMs > 0
                 ? 'bg-emerald-600/80 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-900/40'
                 : stopwatchStartedAt !== null || stopwatchElapsedMs > 0
                   ? 'bg-emerald-600/70 text-white border border-emerald-500/50'
                   : 'bg-zinc-800 text-zinc-400 border border-zinc-600 hover:bg-zinc-700 hover:text-zinc-300'
             }`}
-            title={restCountdownSec > 0 ? 'Остановить отдых' : stopwatchStartedAt !== null ? 'Стоп (сброс)' : 'Старт (с 0:00:00)'}
+            title={restEndAt !== null && restRemainingMs > 0 ? 'Остановить отдых' : stopwatchStartedAt !== null ? 'Стоп (сброс)' : 'Старт (с 0:00:00)'}
           >
             <Timer className="w-5 h-5 flex-shrink-0" />
-            <span>{restCountdownSec > 0 ? formatTime(restCountdownSec) : formatElapsedMs(stopwatchElapsedMs)}</span>
+            <span>{restEndAt !== null && restRemainingMs > 0 ? formatCountdownMs(restRemainingMs) : formatElapsedMs(stopwatchElapsedMs)}</span>
           </button>
           <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 rounded-full hover:bg-zinc-800">
             <MoreVertical className="w-5 h-5 text-zinc-400" />
