@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, Plus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -8,6 +7,7 @@ import {
   deleteTrainingLog,
   saveTrainingLogs,
   batchUpdateTrainingLogs,
+  fetchLastExerciseSessionSetsForPrefill,
 } from '../lib/api';
 import type { TrainingLogRaw } from '../lib/api';
 import { calcEffectiveLoadKg } from '../lib/metrics';
@@ -357,44 +357,41 @@ export function SessionEditScreen({
     const newSetGroupId = crypto.randomUUID();
     const firstTs = sessionRows[0]?.ts ?? new Date().toISOString();
 
-    let defaultWeight = 0;
-    let defaultReps = 0;
-    let defaultRest = 0;
-    let defaultEffective = 0;
+    const prefilledSets = await fetchLastExerciseSessionSetsForPrefill(exerciseId);
+    const toInsert =
+      prefilledSets.length > 0
+        ? prefilledSets.map((set, i) => ({
+            session_id: sessionId,
+            set_group_id: newSetGroupId,
+            exercise_id: exerciseId,
+            weight: set.effective_load,
+            reps: set.reps,
+            order_index: sessionRows.length + i,
+            set_no: i + 1,
+            exercise_order: maxOrder,
+            input_wt: set.input_wt,
+            effective_load: set.effective_load,
+            rest_seconds: set.rest_seconds,
+            completed_at: firstTs,
+          }))
+        : [
+            {
+              session_id: sessionId,
+              set_group_id: newSetGroupId,
+              exercise_id: exerciseId,
+              weight: 0,
+              reps: 0,
+              order_index: sessionRows.length,
+              set_no: 1,
+              exercise_order: maxOrder,
+              input_wt: 0,
+              effective_load: 0,
+              rest_seconds: 0,
+              completed_at: firstTs,
+            },
+          ];
 
-    try {
-      const table = import.meta.env.VITE_TRAINING_LOGS_TABLE || 'training_logs';
-      const { data } = await supabase
-        .from(table)
-        .select('input_wt, reps, rest_seconds, effective_load')
-        .eq('exercise_id', exerciseId)
-        .order('completed_at', { ascending: false, nullsFirst: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data) {
-        defaultWeight = Number(data.input_wt) ?? 0;
-        defaultReps = Number(data.reps) ?? 0;
-        defaultRest = Number(data.rest_seconds) ?? 0;
-        defaultEffective = Number(data.effective_load) ?? 0;
-      }
-    } catch {}
-
-    const { error } = await saveTrainingLogs([
-      {
-        session_id: sessionId,
-        set_group_id: newSetGroupId,
-        exercise_id: exerciseId,
-        weight: defaultEffective,
-        reps: defaultReps,
-        order_index: 0,
-        exercise_order: maxOrder,
-        input_wt: defaultWeight,
-        effective_load: defaultEffective,
-        rest_seconds: defaultRest,
-        completed_at: firstTs,
-      },
-    ]);
+    const { error } = await saveTrainingLogs(toInsert);
     if (error) {
       alert(error.message);
       return;

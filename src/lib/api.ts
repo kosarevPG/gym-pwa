@@ -572,6 +572,54 @@ export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<
   });
 }
 
+/** Один подход из последней сессии для предзаполнения при добавлении упражнения (все поля для вставки). */
+export interface LastSessionSetForPrefill {
+  input_wt: number;
+  effective_load: number;
+  reps: number;
+  rest_seconds: number;
+}
+
+/**
+ * Все подходы из последней по дате сессии по упражнению (для предзаполнения при добавлении упражнения в тренировку).
+ */
+export async function fetchLastExerciseSessionSetsForPrefill(exerciseId: string): Promise<LastSessionSetForPrefill[]> {
+  const select = 'set_group_id, order_index, input_wt, weight, effective_load, reps, rest_seconds, completed_at';
+  const { data: firstBatch, error: err1 } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(select)
+    .eq('exercise_id', exerciseId)
+    .order('completed_at', { ascending: false, nullsFirst: false })
+    .limit(50);
+
+  if (err1 || !firstBatch?.length) return [];
+
+  const lastGroupId = (firstBatch[0] as { set_group_id: string }).set_group_id;
+
+  const { data: sessionData, error: err2 } = await supabase
+    .from(TRAINING_LOGS_TABLE)
+    .select(select)
+    .eq('exercise_id', exerciseId)
+    .eq('set_group_id', lastGroupId)
+    .order('order_index', { ascending: true });
+
+  const rows = (err2 || !sessionData?.length
+    ? (firstBatch as any[]).filter((r: any) => r.set_group_id === lastGroupId)
+    : (sessionData as any[])
+  ).sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0));
+
+  return rows.map((r: any) => {
+    const inputWt = r.input_wt != null && r.input_wt > 0 ? Number(r.input_wt) : Number(r.weight ?? 0);
+    const effective = r.effective_load != null ? Number(r.effective_load) : (r.weight != null ? Number(r.weight) : inputWt);
+    return {
+      input_wt: inputWt,
+      effective_load: effective,
+      reps: Math.floor(Number(r.reps)) || 0,
+      rest_seconds: r.rest_seconds != null ? Math.floor(Number(r.rest_seconds)) : 0,
+    };
+  });
+}
+
 export async function fetchPersonalBestWeight(exerciseId: string): Promise<number | null> {
   const { data, error } = await supabase
     .from(TRAINING_LOGS_TABLE)
