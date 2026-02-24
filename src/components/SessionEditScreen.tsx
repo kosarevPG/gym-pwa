@@ -20,11 +20,8 @@ export interface SessionEditScreenProps {
   sessionDate?: string;
   onBack: () => void;
   onSaved?: () => void;
-  /** При монтировании открыть окно выбора упражнения (после «Завершить упражнение» с экрана упражнения). */
   openAddExerciseOnMount?: boolean;
-  /** Вызвать после открытия окна выбора (чтобы сбросить флаг в родителе). */
   onAddExerciseOpenConsumed?: () => void;
-  /** После добавления упражнения в сессию (например чтобы открыть экран этого упражнения для ввода подходов). */
   onAfterAddExercise?: (exercise: Exercise) => void;
 }
 
@@ -39,7 +36,6 @@ function parseRestMin(value: string): number {
   return Math.round(n * 60);
 }
 
-/** Разбить логи сессии на runs (суперсет / соло) и по упражнениям. */
 function buildRuns(rows: TrainingLogRaw[]) {
   const supersetExerciseIds = new Set<string>();
   const bySetGroupId = new Map<string, TrainingLogRaw[]>();
@@ -64,7 +60,7 @@ function buildRuns(rows: TrainingLogRaw[]) {
     if (!byExercise.has(r.exercise_id)) byExercise.set(r.exercise_id, []);
     byExercise.get(r.exercise_id)!.push(r);
   });
-  // Старый → Новый: первое выполненное сверху (order 0), последнее — снизу
+
   const exerciseOrder = [...byExercise.keys()].sort((a, b) => {
     const orderA = byExercise.get(a)![0].exercise_order ?? 0;
     const orderB = byExercise.get(b)![0].exercise_order ?? 0;
@@ -105,7 +101,6 @@ export function SessionEditScreen({
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
   const [newlyAddedExIds, setNewlyAddedExIds] = useState<Set<string>>(new Set());
   const didOpenAddExerciseOnMount = useRef(false);
-  /** При входе после «Завершить упражнение» показываем блоки свернутыми, чтобы было видно список. */
   const defaultCollapseBlocks = useRef(!!openAddExerciseOnMount).current;
 
   const loadSession = (silent = false) => {
@@ -210,16 +205,19 @@ export function SessionEditScreen({
   };
 
   const handleDeleteSet = async (id: string) => {
+    // Оптимистичное удаление из UI
+    setRows((prev) => prev.filter((r) => r.id !== id));
+
     const { error } = await deleteTrainingLog(id);
     if (error) {
       alert(error.message);
+      loadSession(true); // Откат если ошибка
       return;
     }
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleDeleteSet',message:'delete set success',data:{id},timestamp:Date.now(),hypothesisId:'H3,H5'})}).catch(()=>{});
     // #endregion
-    setRows((prev) => prev.filter((r) => r.id !== id));
-    loadSession(true);
+    loadSession(true); // Тихое обновление
   };
 
   const handleAddSet = async (exerciseId: string, setGroupId: string, exerciseOrder: number) => {
@@ -250,26 +248,39 @@ export function SessionEditScreen({
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleAddSet',message:'add set success',data:{exerciseId,maxSetNo},timestamp:Date.now(),hypothesisId:'H4,H5'})}).catch(()=>{});
     // #endregion
-    loadSession();
+    loadSession(true); // Тихое обновление (без мигания)
   };
 
   const handleDeleteExercise = async (exerciseId: string) => {
     const toDelete = rows.filter((r) => r.exercise_id === exerciseId && r.session_id === sessionId);
+
+    // Оптимистичное обновление: сразу убираем упражнение из UI
+    setRows((prev) => prev.filter((r) => r.exercise_id !== exerciseId));
     setSaving(true);
+
+    let hasError = false;
     for (const r of toDelete) {
       const { error } = await deleteTrainingLog(r.id);
       if (error) {
         alert(error.message);
-        setSaving(false);
-        return;
+        hasError = true;
+        break;
       }
     }
+
+    if (hasError) {
+      setSaving(false);
+      loadSession(true); // Откат
+      return;
+    }
+
     const remaining = rows.filter((r) => r.exercise_id !== exerciseId);
     const orderedExIds = [...new Set(remaining.map((r) => r.exercise_id))].sort((a, b) => {
-      const orderA = remaining.find((r) => r.exercise_id === a)!.exercise_order;
-      const orderB = remaining.find((r) => r.exercise_id === b)!.exercise_order;
+      const orderA = remaining.find((r) => r.exercise_id === a)?.exercise_order ?? 0;
+      const orderB = remaining.find((r) => r.exercise_id === b)?.exercise_order ?? 0;
       return orderA - orderB;
     });
+
     const updates: { id: string; payload: { exercise_order: number } }[] = [];
     remaining.forEach((r) => {
       const newOrder = orderedExIds.indexOf(r.exercise_id);
@@ -277,15 +288,17 @@ export function SessionEditScreen({
         updates.push({ id: r.id, payload: { exercise_order: newOrder } });
       }
     });
+
     if (updates.length > 0) {
       const { error } = await batchUpdateTrainingLogs(updates);
       if (error) alert(error.message);
     }
+
     setSaving(false);
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleDeleteExercise',message:'delete exercise done',data:{exerciseId,deletedCount:toDelete.length},timestamp:Date.now(),hypothesisId:'H3,H5'})}).catch(()=>{});
     // #endregion
-    loadSession();
+    loadSession(true); // Тихое обновление
     onSaved?.();
   };
 
@@ -318,14 +331,13 @@ export function SessionEditScreen({
     // #endregion
     setNewlyAddedExIds((prev) => new Set(prev).add(exerciseId));
     setAddExerciseOpen(false);
-    loadSession();
+    loadSession(true); // Тихое обновление
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
   };
 
   const orderedExIds = useMemo(() => runs.flatMap((r) => r.exIds), [runs]);
 
-  /** Переприсвоить exercise_order по порядку 0,1,2... — устраняет дубли и сбои при смене порядка */
   const applyExerciseOrder = async (newOrderedIds: string[]) => {
     const updates: { id: string; payload: { exercise_order: number } }[] = [];
     newOrderedIds.forEach((exId, idx) => {
@@ -697,7 +709,6 @@ interface ExerciseBlockProps {
   onMoveSetUp: (rowId: string) => void;
   onMoveSetDown: (rowId: string) => void;
   onFinishExercise?: () => void;
-  /** Показать блок свернутым по умолчанию (после «Завершить упражнение»). */
   defaultCollapsed?: boolean;
 }
 
@@ -777,7 +788,7 @@ function ExerciseBlock({
           {canMoveUp && (
             <button
               type="button"
-              onClick={onMoveUp}
+              onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
               className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"
               aria-label="Поднять упражнение"
             >
@@ -787,7 +798,7 @@ function ExerciseBlock({
           {canMoveDown && (
             <button
               type="button"
-              onClick={onMoveDown}
+              onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
               className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"
               aria-label="Опустить упражнение"
             >
@@ -797,7 +808,7 @@ function ExerciseBlock({
           {onSplitFromSuperset && (
             <button
               type="button"
-              onClick={onSplitFromSuperset}
+              onClick={(e) => { e.stopPropagation(); onSplitFromSuperset(); }}
               className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 flex items-center gap-1"
               title={splitLabel ?? 'Разъединить из суперсета'}
             >
@@ -807,7 +818,7 @@ function ExerciseBlock({
           )}
           <button
             type="button"
-            onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
+            onClick={(e) => { e.stopPropagation(); onAddSet(exerciseId, setGroupId, exerciseOrder); }}
             className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"
             aria-label="Добавить подход"
           >
@@ -815,7 +826,8 @@ function ExerciseBlock({
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (confirm('Удалить все подходы этого упражнения из тренировки?'))
                 onDeleteExercise(exerciseId);
             }}
