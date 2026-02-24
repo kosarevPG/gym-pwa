@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronUp, ChevronDown, ChevronRight, Trash2, Plus, Link2, Unlink } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
+import { supabase } from '../lib/supabase';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -205,19 +206,17 @@ export function SessionEditScreen({
   };
 
   const handleDeleteSet = async (id: string) => {
-    // Оптимистичное удаление из UI
     setRows((prev) => prev.filter((r) => r.id !== id));
-
     const { error } = await deleteTrainingLog(id);
     if (error) {
       alert(error.message);
-      loadSession(true); // Откат если ошибка
+      loadSession(true);
       return;
     }
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleDeleteSet',message:'delete set success',data:{id},timestamp:Date.now(),hypothesisId:'H3,H5'})}).catch(()=>{});
     // #endregion
-    loadSession(true); // Тихое обновление
+    loadSession(true);
   };
 
   const handleAddSet = async (exerciseId: string, setGroupId: string, exerciseOrder: number) => {
@@ -225,19 +224,34 @@ export function SessionEditScreen({
     const exerciseRows = sessionRows.filter((r) => r.exercise_id === exerciseId);
     const maxSetNo = exerciseRows.length ? Math.max(...exerciseRows.map((r) => r.set_no)) + 1 : 1;
     const firstTs = sessionRows[0]?.ts ?? new Date().toISOString();
+
+    let defaultWeight = 0;
+    let defaultReps = 0;
+    let defaultRest = 0;
+    let defaultEffective = 0;
+
+    // Предзаполнение: берём данные из последнего подхода этого упражнения в текущей тренировке
+    if (exerciseRows.length > 0) {
+      const lastSet = exerciseRows.reduce((prev, current) => (prev.set_no > current.set_no ? prev : current));
+      defaultWeight = lastSet.input_wt ?? 0;
+      defaultReps = lastSet.reps ?? 0;
+      defaultRest = lastSet.rest_s ?? 0;
+      defaultEffective = lastSet.effective_load ?? 0;
+    }
+
     const { error } = await saveTrainingLogs([
       {
         session_id: sessionId,
         set_group_id: setGroupId,
         exercise_id: exerciseId,
-        weight: 0,
-        reps: 0,
+        weight: defaultEffective,
+        reps: defaultReps,
         order_index: sessionRows.length,
         set_no: maxSetNo,
         exercise_order: exerciseOrder,
-        input_wt: 0,
-        effective_load: 0,
-        rest_seconds: 0,
+        input_wt: defaultWeight,
+        effective_load: defaultEffective,
+        rest_seconds: defaultRest,
         completed_at: firstTs,
       },
     ]);
@@ -248,13 +262,11 @@ export function SessionEditScreen({
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleAddSet',message:'add set success',data:{exerciseId,maxSetNo},timestamp:Date.now(),hypothesisId:'H4,H5'})}).catch(()=>{});
     // #endregion
-    loadSession(true); // Тихое обновление (без мигания)
+    loadSession(true);
   };
 
   const handleDeleteExercise = async (exerciseId: string) => {
     const toDelete = rows.filter((r) => r.exercise_id === exerciseId && r.session_id === sessionId);
-
-    // Оптимистичное обновление: сразу убираем упражнение из UI
     setRows((prev) => prev.filter((r) => r.exercise_id !== exerciseId));
     setSaving(true);
 
@@ -270,7 +282,7 @@ export function SessionEditScreen({
 
     if (hasError) {
       setSaving(false);
-      loadSession(true); // Откат
+      loadSession(true);
       return;
     }
 
@@ -298,7 +310,7 @@ export function SessionEditScreen({
     // #region agent log
     if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:handleDeleteExercise',message:'delete exercise done',data:{exerciseId,deletedCount:toDelete.length},timestamp:Date.now(),hypothesisId:'H3,H5'})}).catch(()=>{});
     // #endregion
-    loadSession(true); // Тихое обновление
+    loadSession(true);
     onSaved?.();
   };
 
@@ -307,18 +319,45 @@ export function SessionEditScreen({
     const maxOrder = sessionRows.length ? Math.max(...sessionRows.map((r) => r.exercise_order)) + 1 : 0;
     const newSetGroupId = crypto.randomUUID();
     const firstTs = sessionRows[0]?.ts ?? new Date().toISOString();
+
+    let defaultWeight = 0;
+    let defaultReps = 0;
+    let defaultRest = 0;
+    let defaultEffective = 0;
+
+    // Предзаполнение: последний подход этого упражнения из истории (БД: rest_seconds)
+    try {
+      const table = import.meta.env.VITE_TRAINING_LOGS_TABLE || 'training_logs';
+      const { data } = await supabase
+        .from(table)
+        .select('input_wt, reps, rest_seconds, effective_load')
+        .eq('exercise_id', exerciseId)
+        .order('completed_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data) {
+        defaultWeight = Number(data.input_wt) ?? 0;
+        defaultReps = Number(data.reps) ?? 0;
+        defaultRest = Number(data.rest_seconds) ?? 0;
+        defaultEffective = Number(data.effective_load) ?? 0;
+      }
+    } catch {
+      // Нет истории — остаются нули
+    }
+
     const { error } = await saveTrainingLogs([
       {
         session_id: sessionId,
         set_group_id: newSetGroupId,
         exercise_id: exerciseId,
-        weight: 0,
-        reps: 0,
+        weight: defaultEffective,
+        reps: defaultReps,
         order_index: 0,
         exercise_order: maxOrder,
-        input_wt: 0,
-        effective_load: 0,
-        rest_seconds: 0,
+        input_wt: defaultWeight,
+        effective_load: defaultEffective,
+        rest_seconds: defaultRest,
         completed_at: firstTs,
       },
     ]);
@@ -331,7 +370,7 @@ export function SessionEditScreen({
     // #endregion
     setNewlyAddedExIds((prev) => new Set(prev).add(exerciseId));
     setAddExerciseOpen(false);
-    loadSession(true); // Тихое обновление
+    loadSession(true);
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
   };
@@ -570,6 +609,7 @@ export function SessionEditScreen({
                       onMoveSetDown={handleMoveSetDown}
                       onFinishExercise={() => setAddExerciseOpen(true)}
                       defaultCollapsed={newlyAddedExIds.has(exId) ? false : defaultCollapseBlocks}
+                      autoEditFirstSet={newlyAddedExIds.has(exId)}
                     />
                   ))}
                 </div>
@@ -609,6 +649,7 @@ export function SessionEditScreen({
                       onMoveSetDown={handleMoveSetDown}
                       onFinishExercise={() => setAddExerciseOpen(true)}
                       defaultCollapsed={newlyAddedExIds.has(exId) ? false : defaultCollapseBlocks}
+                      autoEditFirstSet={newlyAddedExIds.has(exId)}
                     />
                   ))}
                 </div>
@@ -710,6 +751,7 @@ interface ExerciseBlockProps {
   onMoveSetDown: (rowId: string) => void;
   onFinishExercise?: () => void;
   defaultCollapsed?: boolean;
+  autoEditFirstSet?: boolean;
 }
 
 function ExerciseBlock({
@@ -734,6 +776,7 @@ function ExerciseBlock({
   onMoveSetDown,
   onFinishExercise,
   defaultCollapsed,
+  autoEditFirstSet,
 }: ExerciseBlockProps) {
   const [isCollapsed, setIsCollapsed] = useState(!!defaultCollapsed);
   const ex = exerciseMap.get(exerciseId);
@@ -741,8 +784,22 @@ function ExerciseBlock({
   const nameEn = ex?.nameEn;
   const setGroupId = sets[0]?.set_group_id ?? '';
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
-  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [editingId, setEditingId] = useState<string | null>(() => {
+    if (autoEditFirstSet && sets.length > 0) return sets[sets.length - 1].id;
+    return null;
+  });
+
   const [orderInput, setOrderInput] = useState(String(orderNum));
+  const prevSetsLength = useRef(sets.length);
+
+  useEffect(() => {
+    if (sets.length > prevSetsLength.current) {
+      const newSet = sets[sets.length - 1];
+      if (newSet) setEditingId(newSet.id);
+    }
+    prevSetsLength.current = sets.length;
+  }, [sets]);
 
   useEffect(() => {
     setOrderInput(String(orderNum));
