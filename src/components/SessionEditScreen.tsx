@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronUp, ChevronDown, ChevronRight, Trash2, Plus, Link2, Unlink } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
 import {
@@ -20,6 +20,12 @@ export interface SessionEditScreenProps {
   sessionDate?: string;
   onBack: () => void;
   onSaved?: () => void;
+  /** При монтировании открыть окно выбора упражнения (после «Завершить упражнение» с экрана упражнения). */
+  openAddExerciseOnMount?: boolean;
+  /** Вызвать после открытия окна выбора (чтобы сбросить флаг в родителе). */
+  onAddExerciseOpenConsumed?: () => void;
+  /** После добавления упражнения в сессию (например чтобы открыть экран этого упражнения для ввода подходов). */
+  onAfterAddExercise?: (exercise: Exercise) => void;
 }
 
 function restSecToMin(restS: number): string {
@@ -82,13 +88,22 @@ function buildRuns(rows: TrainingLogRaw[]) {
   return { runs, byExercise };
 }
 
-export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: SessionEditScreenProps) {
+export function SessionEditScreen({
+  sessionId,
+  sessionDate,
+  onBack,
+  onSaved,
+  openAddExerciseOnMount,
+  onAddExerciseOpenConsumed,
+  onAfterAddExercise,
+}: SessionEditScreenProps) {
   const [rows, setRows] = useState<TrainingLogRaw[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
+  const didOpenAddExerciseOnMount = useRef(false);
 
   const loadSession = (silent = false) => {
     if (!silent) setLoading(true);
@@ -105,6 +120,14 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
   useEffect(() => {
     loadSession();
   }, [sessionId]);
+
+  useEffect(() => {
+    if (openAddExerciseOnMount && !loading && !didOpenAddExerciseOnMount.current && onAddExerciseOpenConsumed) {
+      didOpenAddExerciseOnMount.current = true;
+      setAddExerciseOpen(true);
+      onAddExerciseOpenConsumed();
+    }
+  }, [openAddExerciseOnMount, loading, onAddExerciseOpenConsumed]);
 
   const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const { runs, byExercise } = useMemo(() => buildRuns(rows), [rows]);
@@ -292,6 +315,8 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
     // #endregion
     setAddExerciseOpen(false);
     loadSession();
+    const addedEx = exerciseMap.get(exerciseId);
+    if (addedEx) onAfterAddExercise?.(addedEx);
   };
 
   const orderedExIds = useMemo(() => runs.flatMap((r) => r.exIds), [runs]);

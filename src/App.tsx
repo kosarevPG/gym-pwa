@@ -23,6 +23,9 @@ export default function App() {
   const [summarySessionId, setSummarySessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionDate, setEditingSessionDate] = useState<string | undefined>(undefined);
+  const [openAddExerciseWhenSessionEdit, setOpenAddExerciseWhenSessionEdit] = useState(false);
+  /** true = зашли в редактирование сессии после «Завершить упражнение» (назад — в категории). */
+  const [sessionEditFromWorkout, setSessionEditFromWorkout] = useState(false);
   const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
@@ -136,7 +139,11 @@ export default function App() {
         onBack={() => setScreen('exercises')}
         onComplete={() => {
           setLastExerciseInSession(null);
-          setScreen('exercises');
+          setEditingSessionId(sessionId);
+          setEditingSessionDate(undefined);
+          setOpenAddExerciseWhenSessionEdit(true);
+          setSessionEditFromWorkout(true);
+          setScreen('session-edit');
         }}
         onEnsureSession={ensureWorkoutSession}
         onEditExercise={handleEditExercise}
@@ -183,6 +190,8 @@ export default function App() {
         onEditSession={(sid, date) => {
           setEditingSessionId(sid);
           setEditingSessionDate(date);
+          setSessionEditFromWorkout(false);
+          setOpenAddExerciseWhenSessionEdit(false);
           setScreen('session-edit');
         }}
       />
@@ -197,8 +206,18 @@ export default function App() {
         onBack={() => {
           setEditingSessionId(null);
           setEditingSessionDate(undefined);
-          setScreen('history');
+          setOpenAddExerciseWhenSessionEdit(false);
+          setSessionEditFromWorkout(false);
+          setScreen(sessionEditFromWorkout ? 'categories' : 'history');
         }}
+        openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
+        onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
+        onAfterAddExercise={sessionEditFromWorkout ? (exercise) => {
+          const category = getCategoryBySlug(exercise.category) ?? { slug: exercise.category, name: exercise.category };
+          setSelectedExercise(exercise);
+          setLastExerciseInSession({ exercise, category });
+          setScreen('exercise-detail');
+        } : undefined}
       />
     );
   }
