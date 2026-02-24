@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ChevronUp, ChevronDown, Trash2, Plus, Link2, Unlink } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronRight, Trash2, Plus, Link2, Unlink } from 'lucide-react';
 import { ScreenHeader } from './ScreenHeader';
 import {
   fetchLogsBySessionId,
@@ -527,6 +527,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
                       canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
                       onMoveSetUp={handleMoveSetUp}
                       onMoveSetDown={handleMoveSetDown}
+                      onFinishExercise={() => setAddExerciseOpen(true)}
                     />
                   ))}
                 </div>
@@ -564,6 +565,7 @@ export function SessionEditScreen({ sessionId, sessionDate, onBack, onSaved }: S
                       canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
                       onMoveSetUp={handleMoveSetUp}
                       onMoveSetDown={handleMoveSetDown}
+                      onFinishExercise={() => setAddExerciseOpen(true)}
                     />
                   ))}
                 </div>
@@ -663,6 +665,7 @@ interface ExerciseBlockProps {
   canMoveDown: boolean;
   onMoveSetUp: (rowId: string) => void;
   onMoveSetDown: (rowId: string) => void;
+  onFinishExercise?: () => void;
 }
 
 function ExerciseBlock({
@@ -685,7 +688,9 @@ function ExerciseBlock({
   canMoveDown,
   onMoveSetUp,
   onMoveSetDown,
+  onFinishExercise,
 }: ExerciseBlockProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const ex = exerciseMap.get(exerciseId);
   const nameRu = ex?.nameRu ?? exerciseId;
   const nameEn = ex?.nameEn;
@@ -693,14 +698,21 @@ function ExerciseBlock({
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [orderInput, setOrderInput] = useState(String(orderNum));
+
   useEffect(() => {
     setOrderInput(String(orderNum));
   }, [orderNum]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+    <div className="space-y-2 bg-zinc-900/30 border border-zinc-800/60 rounded-xl p-2 transition-all">
+      <div
+        className="flex items-center justify-between gap-2 flex-wrap cursor-pointer select-none"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+      >
         <div className="flex items-center gap-2 min-w-0">
+          <div className="text-zinc-400 hover:text-white transition-colors p-1 -ml-1">
+            {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </div>
           <span className="text-zinc-500 text-xs shrink-0">№</span>
           <input
             type="number"
@@ -714,14 +726,20 @@ function ExerciseBlock({
               setOrderInput(String(orderNum));
             }}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            onClick={(e) => e.stopPropagation()}
             className="w-10 text-center text-sm bg-zinc-800 border border-zinc-600 rounded px-1 py-0.5 text-white"
           />
-          <p className="font-medium text-white text-sm">
+          <p className="font-medium text-white text-sm truncate">
             {nameRu}
             {nameEn ? ` / ${nameEn}` : ''}
+            {isCollapsed && (
+              <span className="ml-2 text-zinc-500 font-normal text-xs">
+                ({sets.length} подходов)
+              </span>
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           {canMoveUp && (
             <button
               type="button"
@@ -774,26 +792,42 @@ function ExerciseBlock({
           </button>
         </div>
       </div>
-      <div className="space-y-1 pl-2">
-        {sets.map((row, setIndex) => (
-          <SetRowEdit
-            key={row.id}
-            row={row}
-            setsCount={sets.length}
-            setIndex={setIndex}
-            isEditing={editingId === row.id}
-            onStartEdit={() => setEditingId(row.id)}
-            onBlur={() => setEditingId(null)}
-            onUpdate={(patch) => {
-              onUpdateSet(row.id, patch);
-              setEditingId(null);
-            }}
-            onDelete={() => onDeleteSet(row.id)}
-            onMoveUp={() => onMoveSetUp(row.id)}
-            onMoveDown={() => onMoveSetDown(row.id)}
-          />
-        ))}
-      </div>
+
+      {!isCollapsed && (
+        <div className="space-y-1 pl-2 pt-2 border-t border-zinc-800/50 mt-2">
+          {sets.map((row, setIndex) => (
+            <SetRowEdit
+              key={row.id}
+              row={row}
+              setsCount={sets.length}
+              setIndex={setIndex}
+              isEditing={editingId === row.id}
+              onStartEdit={() => setEditingId(row.id)}
+              onBlur={() => setEditingId(null)}
+              onUpdate={(patch) => {
+                onUpdateSet(row.id, patch);
+                setEditingId(null);
+              }}
+              onDelete={() => onDeleteSet(row.id)}
+              onMoveUp={() => onMoveSetUp(row.id)}
+              onMoveDown={() => onMoveSetDown(row.id)}
+            />
+          ))}
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setIsCollapsed(true);
+                onFinishExercise?.();
+              }}
+              className="w-full py-2.5 rounded-xl border border-green-500/30 text-green-400 hover:bg-green-500/10 text-sm font-medium transition-colors flex justify-center items-center"
+            >
+              Завершить упражнение
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
