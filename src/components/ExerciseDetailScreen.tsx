@@ -446,11 +446,11 @@ export function ExerciseDetailScreen({
   };
 
   // --- RENDER HELPERS ---
-  /** Обратный отсчёт отдыха: минуты:секунды */
+  /** Обратный отсчёт отдыха: минуты:секунды:сотые (сотые = 00, т.к. отсчёт в целых секундах) — единый формат 0:00:00 */
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
+    return `${m}:${s.toString().padStart(2, '0')}:00`;
   };
   /** Секундомер: минуты:секунды:сотые — точный при сворачивании приложения */
   const formatElapsedMs = (ms: number) => {
