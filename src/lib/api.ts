@@ -142,6 +142,7 @@ export interface SaveTrainingLogRow {
   side_mult?: number;
   set_volume?: number;
   rest_seconds?: number;
+  /** Суперсет: второе упражнение в этом блоке (сет ↔ другое упражнение). Все подходы блока имеют один set_group_id. */
   superset_exercise_id?: string | null;
   one_rm?: number;
   volume?: number;
