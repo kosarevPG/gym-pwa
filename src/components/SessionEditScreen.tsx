@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play } from 'lucide-react';
+import { ChevronLeft, Plus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, ChevronDown, CheckCircle2 } from 'lucide-react';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -97,6 +97,9 @@ export function SessionEditScreen({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
+  /** 'superset' = следующий выбранный упражнение добавится в суперсет с последним */
+  const [addExerciseMode, setAddExerciseMode] = useState<'normal' | 'superset'>('normal');
+  const [collapsedExerciseIds, setCollapsedExerciseIds] = useState<Set<string>>(new Set());
   const didOpenAddExerciseOnMount = useRef(false);
 
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
@@ -409,6 +412,60 @@ export function SessionEditScreen({
       return;
     }
     setAddExerciseOpen(false);
+    setAddExerciseMode('normal');
+    loadSession(true);
+    const addedEx = exerciseMap.get(exerciseId);
+    if (addedEx) onAfterAddExercise?.(addedEx);
+  };
+
+  /** Добавить упражнение следующим в суперсет (после последнего в списке). */
+  const handleAddExerciseToSuperset = async (exerciseId: string) => {
+    if (orderedExIds.length === 0) return;
+    const afterExId = orderedExIds[orderedExIds.length - 1];
+    const afterSets = byExercise.get(afterExId)!;
+    const setGroupId = afterSets[0].set_group_id;
+    const afterOrder = afterSets[0].exercise_order;
+    const numSets = afterSets.length;
+    const sessionRows = rows.filter((r) => r.session_id === sessionId);
+    const firstTs = sessionRows[0]?.ts ?? new Date().toISOString();
+
+    const prefilled = await fetchLastExerciseSessionSetsForPrefill(exerciseId);
+    const toInsert = Array.from({ length: numSets }, (_, i) => {
+      const set = i < prefilled.length ? prefilled[i] : prefilled[prefilled.length - 1] ?? { input_wt: 0, effective_load: 0, reps: 0, rest_seconds: 0 };
+      return {
+        session_id: sessionId,
+        set_group_id: setGroupId,
+        exercise_id: exerciseId,
+        weight: set.effective_load,
+        reps: set.reps,
+        order_index: i,
+        set_no: i + 1,
+        exercise_order: afterOrder + 1,
+        input_wt: set.input_wt,
+        effective_load: set.effective_load,
+        rest_seconds: set.rest_seconds,
+        completed_at: firstTs,
+      };
+    });
+
+    const shiftUpdates = rows
+      .filter((r) => r.session_id === sessionId && r.exercise_order > afterOrder)
+      .map((r) => ({ id: r.id, payload: { exercise_order: r.exercise_order + 1 } as { exercise_order: number } }));
+    if (shiftUpdates.length > 0) {
+      const { error: err } = await batchUpdateTrainingLogs(shiftUpdates);
+      if (err) {
+        alert(err.message);
+        return;
+      }
+    }
+
+    const { error } = await saveTrainingLogs(toInsert);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setAddExerciseOpen(false);
+    setAddExerciseMode('normal');
     loadSession(true);
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
@@ -574,6 +631,9 @@ export function SessionEditScreen({
                     canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
                     doneSets={doneSets}
                     onToggleSetDone={handleToggleSetDone}
+                    isCollapsed={collapsedExerciseIds.has(exId)}
+                    onFinishExercise={() => setCollapsedExerciseIds((prev) => new Set(prev).add(exId))}
+                    onExpand={() => setCollapsedExerciseIds((prev) => { const n = new Set(prev); n.delete(exId); return n; })}
                   />
                 ))}
               </div>
@@ -581,47 +641,66 @@ export function SessionEditScreen({
           ))
         )}
 
-        <button
-          type="button"
-          onClick={() => setAddExerciseOpen(true)}
-          className="w-full py-4 rounded-2xl bg-zinc-800/50 text-blue-400 font-bold text-lg hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2 mb-20"
-        >
-          <Plus className="w-6 h-6" />
-          Добавить упражнение
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2 mb-20">
+          <button
+            type="button"
+            onClick={() => { setAddExerciseMode('normal'); setAddExerciseOpen(true); }}
+            className="flex-1 py-4 rounded-2xl bg-zinc-800/50 text-blue-400 font-bold text-lg hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus className="w-6 h-6" />
+            Добавить упражнение
+          </button>
+          {orderedExIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { setAddExerciseMode('superset'); setAddExerciseOpen(true); }}
+              className="flex-1 py-4 rounded-2xl bg-blue-600/30 text-blue-300 font-bold text-lg hover:bg-blue-600/50 transition-colors flex items-center justify-center gap-2 border border-blue-500/50"
+            >
+              <Link2 className="w-5 h-5" />
+              Добавить в суперсет
+            </button>
+          )}
+        </div>
       </main>
 
       {addExerciseOpen && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-end p-4"
-          onClick={() => setAddExerciseOpen(false)}
+          onClick={() => { setAddExerciseOpen(false); setAddExerciseMode('normal'); }}
         >
           <div
             className="w-full max-w-lg max-h-[80vh] bg-zinc-900 rounded-t-3xl p-4 shadow-xl overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-bold mb-4 text-center">Выберите упражнение</h2>
+            <h2 className="text-xl font-bold mb-2 text-center">
+              {addExerciseMode === 'superset' ? 'Добавить следующим в суперсет' : 'Выберите упражнение'}
+            </h2>
+            {addExerciseMode === 'superset' && orderedExIds.length > 0 && (
+              <p className="text-zinc-500 text-sm text-center mb-4">
+                После: {exerciseMap.get(orderedExIds[orderedExIds.length - 1])?.nameRu ?? ''}
+              </p>
+            )}
             <div className="overflow-y-auto flex-1 space-y-1">
               {exercises.map((ex) => (
                 <button
                   key={ex.id}
                   type="button"
-                  onClick={() => handleAddExercise(ex.id)}
+                  onClick={() => addExerciseMode === 'superset' ? handleAddExerciseToSuperset(ex.id) : handleAddExercise(ex.id)}
                   className="w-full text-left px-4 py-4 rounded-2xl hover:bg-zinc-800 transition-colors flex items-center gap-3 border border-transparent hover:border-zinc-700"
                 >
                   <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
                     <Play className="w-5 h-5 text-zinc-400 ml-1" />
                   </div>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="font-semibold text-white">{ex.nameRu}</div>
-                    {ex.nameEn && <div className="text-zinc-500 text-xs">{ex.nameEn}</div>}
+                    {ex.nameEn && <div className="text-zinc-500 text-xs truncate">{ex.nameEn}</div>}
                   </div>
                 </button>
               ))}
             </div>
             <button
               type="button"
-              onClick={() => setAddExerciseOpen(false)}
+              onClick={() => { setAddExerciseOpen(false); setAddExerciseMode('normal'); }}
               className="mt-4 py-4 rounded-2xl bg-zinc-800 text-white font-bold w-full"
             >
               Отмена
@@ -650,6 +729,9 @@ interface ExerciseBlockProps {
   canMoveDown: boolean;
   doneSets: Set<string>;
   onToggleSetDone: (setId: string, restSec: number) => void;
+  isCollapsed?: boolean;
+  onFinishExercise?: () => void;
+  onExpand?: () => void;
 }
 
 function ExerciseBlock({
@@ -669,94 +751,125 @@ function ExerciseBlock({
   canMoveDown,
   doneSets,
   onToggleSetDone,
+  isCollapsed = false,
+  onFinishExercise,
+  onExpand,
 }: ExerciseBlockProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ex = exerciseMap.get(exerciseId);
   const nameRu = ex?.nameRu ?? exerciseId;
+  const nameEn = ex?.nameEn ?? '';
   const setGroupId = sets[0]?.set_group_id ?? '';
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
 
+  const header = (
+    <div
+      className={`flex items-center justify-between px-4 py-3 bg-zinc-800/30 border-b border-zinc-800/50 ${isCollapsed ? 'border-b-0 cursor-pointer hover:bg-zinc-800/50' : ''}`}
+      onClick={isCollapsed ? onExpand : undefined}
+      role={isCollapsed ? 'button' : undefined}
+    >
+      <div className="min-w-0 flex-1 pr-2">
+        <div className="font-bold text-lg text-white line-clamp-2 break-words leading-tight">{nameRu}</div>
+        {nameEn && <div className="text-zinc-500 text-sm line-clamp-1 break-words mt-0.5">{nameEn}</div>}
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {isCollapsed && onExpand && (
+          <span className="text-zinc-500 text-xs mr-1">Развернуть</span>
+        )}
+        {isCollapsed ? (
+          <ChevronDown className="w-6 h-6 text-zinc-400" />
+        ) : (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
+              className="p-1.5 -mr-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
+            >
+              <MoreHorizontal className="w-6 h-6" />
+            </button>
+
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-40 py-1 overflow-hidden">
+                  {onFinishExercise && (
+                    <button onClick={() => { onFinishExercise(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Закончить упражнение
+                    </button>
+                  )}
+                  {canMoveUp && (
+                    <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3">
+                      <ArrowUp className="w-4 h-4 text-zinc-400" /> Переместить выше
+                    </button>
+                  )}
+                  {canMoveDown && (
+                    <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                      <ArrowDown className="w-4 h-4 text-zinc-400" /> Переместить ниже
+                    </button>
+                  )}
+                  {onSplitFromSuperset && (
+                    <button onClick={() => { onSplitFromSuperset(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                      <Unlink className="w-4 h-4 text-blue-400" /> Убрать из суперсета
+                    </button>
+                  )}
+                  {onMergeWithNext && (
+                    <button onClick={() => { onMergeWithNext(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                      <Link2 className="w-4 h-4 text-blue-400" /> В суперсет со след.
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (confirm('Удалить упражнение из тренировки?')) onDeleteExercise(exerciseId);
+                      setMenuOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
+                  >
+                    <Trash2 className="w-4 h-4" /> Удалить упражнение
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800/80 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-zinc-800/30 border-b border-zinc-800/50">
-        <h2 className="font-bold text-lg text-white truncate pr-4">{nameRu}</h2>
+      {header}
+      {!isCollapsed && (
+        <>
+          <div className="grid grid-cols-[28px_1fr_1fr_1fr_44px] gap-2 px-3 py-2 text-[11px] font-semibold text-zinc-500 text-center uppercase tracking-wider">
+            <div>Сет</div>
+            <div>кг</div>
+            <div>Повт</div>
+            <div>Отдых</div>
+            <div><Check className="w-4 h-4 mx-auto" /></div>
+          </div>
 
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="p-1.5 -mr-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
-          >
-            <MoreHorizontal className="w-6 h-6" />
-          </button>
+          <div className="px-2 pb-3 space-y-1.5">
+            {sets.map((row) => (
+              <SetRowEdit
+                key={row.id}
+                row={row}
+                isDone={doneSets.has(row.id)}
+                onToggleDone={() => onToggleSetDone(row.id, row.rest_s)}
+                onUpdate={(patch) => onUpdateSet(row.id, patch)}
+                onDelete={() => onDeleteSet(row.id)}
+              />
+            ))}
 
-          {menuOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-40 py-1 overflow-hidden">
-                {canMoveUp && (
-                  <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3">
-                    <ArrowUp className="w-4 h-4 text-zinc-400" /> Переместить выше
-                  </button>
-                )}
-                {canMoveDown && (
-                  <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
-                    <ArrowDown className="w-4 h-4 text-zinc-400" /> Переместить ниже
-                  </button>
-                )}
-                {onSplitFromSuperset && (
-                  <button onClick={() => { onSplitFromSuperset(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
-                    <Unlink className="w-4 h-4 text-blue-400" /> Убрать из суперсета
-                  </button>
-                )}
-                {onMergeWithNext && (
-                  <button onClick={() => { onMergeWithNext(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
-                    <Link2 className="w-4 h-4 text-blue-400" /> В суперсет со след.
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    if (confirm('Удалить упражнение из тренировки?')) onDeleteExercise(exerciseId);
-                    setMenuOpen(false);
-                  }}
-                  className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
-                >
-                  <Trash2 className="w-4 h-4" /> Удалить упражнение
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-[28px_1fr_1fr_1fr_44px] gap-2 px-3 py-2 text-[11px] font-semibold text-zinc-500 text-center uppercase tracking-wider">
-        <div>Сет</div>
-        <div>кг</div>
-        <div>Повт</div>
-        <div>Отдых</div>
-        <div><Check className="w-4 h-4 mx-auto" /></div>
-      </div>
-
-      <div className="px-2 pb-3 space-y-1.5">
-        {sets.map((row) => (
-          <SetRowEdit
-            key={row.id}
-            row={row}
-            isDone={doneSets.has(row.id)}
-            onToggleDone={() => onToggleSetDone(row.id, row.rest_s)}
-            onUpdate={(patch) => onUpdateSet(row.id, patch)}
-            onDelete={() => onDeleteSet(row.id)}
-          />
-        ))}
-
-        <button
-          type="button"
-          onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
-          className="w-full py-2.5 mt-2 rounded-xl bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white font-medium text-sm flex items-center justify-center gap-1.5 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Добавить подход
-        </button>
-      </div>
+            <button
+              type="button"
+              onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
+              className="w-full py-2.5 mt-2 rounded-xl bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white font-medium text-sm flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Добавить подход
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
