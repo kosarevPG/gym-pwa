@@ -36,6 +36,8 @@ interface HomeScreenBentoProps {
   onOpenHistory: () => void;
   onSessionStarted: (sessionId: string) => void;
   onWorkoutFinished: (sessionId: string) => void;
+  /** Открыть экран «Текущая тренировка» для активной сессии. */
+  onOpenCurrentSession: (sessionId: string) => void;
 }
 
 function formatElapsed(ms: number): string {
@@ -104,6 +106,7 @@ export function HomeScreenBento({
   onOpenHistory,
   onSessionStarted,
   onWorkoutFinished,
+  onOpenCurrentSession,
 }: HomeScreenBentoProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -379,7 +382,7 @@ export function HomeScreenBento({
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={onOpenExercises}
+                        onClick={() => onOpenCurrentSession(activeSession.id)}
                         className="flex-1 bg-white text-blue-700 font-bold py-3.5 rounded-xl shadow-lg flex items-center justify-center gap-2 hover:bg-blue-50 transition-colors"
                       >
                         Продолжить

@@ -26,6 +26,8 @@ export default function App() {
   const [openAddExerciseWhenSessionEdit, setOpenAddExerciseWhenSessionEdit] = useState(false);
   /** true = зашли в редактирование сессии после «Завершить упражнение» (назад — в категории). */
   const [sessionEditFromWorkout, setSessionEditFromWorkout] = useState(false);
+  /** true = зашли в «Текущая тренировка» с главной по кнопке «Продолжить» (назад — на главную). */
+  const [sessionEditFromHome, setSessionEditFromHome] = useState(false);
   const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
@@ -144,6 +146,7 @@ export default function App() {
           setEditingSessionDate(undefined);
           setOpenAddExerciseWhenSessionEdit(true);
           setSessionEditFromWorkout(true);
+          setSessionEditFromHome(false);
           setScreen('session-edit');
         }}
         onEnsureSession={ensureWorkoutSession}
@@ -192,6 +195,7 @@ export default function App() {
           setEditingSessionId(sid);
           setEditingSessionDate(date);
           setSessionEditFromWorkout(false);
+          setSessionEditFromHome(false);
           setOpenAddExerciseWhenSessionEdit(false);
           setScreen('session-edit');
         }}
@@ -205,11 +209,14 @@ export default function App() {
         sessionId={editingSessionId}
         sessionDate={editingSessionDate}
         onBack={() => {
+          const fromHome = sessionEditFromHome;
+          const fromWorkout = sessionEditFromWorkout;
           setEditingSessionId(null);
           setEditingSessionDate(undefined);
           setOpenAddExerciseWhenSessionEdit(false);
           setSessionEditFromWorkout(false);
-          setScreen(sessionEditFromWorkout ? 'categories' : 'history');
+          setSessionEditFromHome(false);
+          setScreen(fromHome ? 'home' : fromWorkout ? 'categories' : 'history');
         }}
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
         onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
@@ -244,6 +251,14 @@ export default function App() {
           setSummarySessionId(id);
           setLastExerciseInSession(null);
           setScreen('summary');
+        }}
+        onOpenCurrentSession={(id) => {
+          setEditingSessionId(id);
+          setEditingSessionDate(undefined);
+          setOpenAddExerciseWhenSessionEdit(false);
+          setSessionEditFromWorkout(false);
+          setSessionEditFromHome(true);
+          setScreen('session-edit');
         }}
       />
     );
