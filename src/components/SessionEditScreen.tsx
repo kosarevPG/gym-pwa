@@ -108,6 +108,8 @@ export function SessionEditScreen({
   const [stopwatchElapsedMs, setStopwatchElapsedMs] = useState(0);
 
   const [doneSets, setDoneSets] = useState<Set<string>>(new Set());
+  /** После добавления подхода — фокус на поле «Вес» нового сета этого упражнения */
+  const [focusNewSetExerciseId, setFocusNewSetExerciseId] = useState<string | null>(null);
 
   const loadSession = (silent = false) => {
     if (!silent) setLoading(true);
@@ -317,6 +319,7 @@ export function SessionEditScreen({
       alert(error.message);
       return;
     }
+    setFocusNewSetExerciseId(exerciseId);
     loadSession(true);
   };
 
@@ -556,64 +559,60 @@ export function SessionEditScreen({
 
   return (
     <div className="min-h-screen bg-black text-white pb-safe flex flex-col">
-      <header className="sticky top-0 z-20 bg-black/80 backdrop-blur-md border-b border-white/10 px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-20 bg-black/95 backdrop-blur border-b border-white/5 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800 transition-colors flex-shrink-0">
-            <ChevronLeft className="w-6 h-6 text-zinc-300" />
+          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors flex-shrink-0">
+            <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="font-bold text-lg leading-tight break-words">{title}</h1>
+            <h1 className="font-bold text-base leading-tight break-words text-zinc-100">{title}</h1>
             {runs.length > 0 && (
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
+              <div className="flex items-center gap-2 text-xs text-zinc-500">
                 <span>{sessionHeader.durationMin} мин</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (restEndAt !== null && restRemainingMs > 0) {
-                setRestEndAt(null);
-                setRestRemainingMs(0);
-                return;
-              }
-              if (stopwatchStartedAt !== null) {
-                setStopwatchStartedAt(null);
-                setStopwatchElapsedMs(0);
-              } else {
-                setStopwatchStartedAt(Date.now());
-              }
-            }}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl font-mono text-base font-semibold transition-all min-w-[5rem] justify-center ${
-              restEndAt !== null && restRemainingMs > 0
-                ? 'bg-emerald-600/80 text-white border-2 border-emerald-400 shadow-lg shadow-emerald-900/40'
-                : stopwatchStartedAt !== null || stopwatchElapsedMs > 0
-                  ? 'bg-emerald-600/70 text-white border border-emerald-500/50'
-                  : 'bg-zinc-800 text-zinc-400 border border-zinc-600 hover:bg-zinc-700 hover:text-zinc-300'
-            }`}
-          >
-            <Timer className="w-5 h-5 flex-shrink-0" />
-            <span>{restEndAt !== null && restRemainingMs > 0 ? formatCountdownMs(restRemainingMs) : formatElapsedMs(stopwatchElapsedMs)}</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => {
+            if (restEndAt !== null && restRemainingMs > 0) {
+              setRestEndAt(null);
+              setRestRemainingMs(0);
+              return;
+            }
+            if (stopwatchStartedAt !== null) {
+              setStopwatchStartedAt(null);
+              setStopwatchElapsedMs(0);
+            } else {
+              setStopwatchStartedAt(Date.now());
+            }
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-mono text-sm font-medium transition-all ${
+            restEndAt !== null && restRemainingMs > 0
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              : stopwatchStartedAt !== null || stopwatchElapsedMs > 0
+                ? 'bg-white/10 text-white border border-white/10'
+                : 'bg-white/5 border border-white/10 text-zinc-400 hover:text-zinc-300'
+          }`}
+        >
+          <Timer className="w-4 h-4 flex-shrink-0" />
+          <span>{restEndAt !== null && restRemainingMs > 0 ? formatCountdownMs(restRemainingMs) : formatElapsedMs(stopwatchElapsedMs)}</span>
+        </button>
       </header>
 
-      <main className="flex-1 p-2 sm:p-4 space-y-4 max-w-lg mx-auto w-full">
+      <main className="flex-1 px-4 pt-4 pb-32 space-y-6 max-w-lg mx-auto w-full">
         {runs.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-zinc-500 mb-4">Тренировка пуста.</p>
-          </div>
+          <div className="text-center py-16 text-zinc-500">Тренировка пуста.</div>
         ) : (
           runs.map((run, runIdx) => (
             <div key={run.superset ? `superset-${runIdx}` : `solo-${runIdx}`} className="relative">
               {run.superset && (
-                <div className="absolute left-2 sm:left-3 top-8 bottom-8 w-1 bg-blue-500 rounded-full z-0" />
+                <div className="absolute -left-1 top-2 bottom-2 w-0.5 bg-blue-500/50 rounded-full z-0" />
               )}
 
-              <div className={run.superset ? 'pl-5 sm:pl-7 space-y-4' : 'space-y-4'}>
+              <div className={run.superset ? 'pl-4 space-y-6' : 'space-y-6'}>
                 {run.exIds.map((exId) => (
                   <ExerciseBlock
                     key={exId}
@@ -636,6 +635,8 @@ export function SessionEditScreen({
                     isCollapsed={collapsedExerciseIds.has(exId)}
                     onFinishExercise={() => setCollapsedExerciseIds((prev) => new Set(prev).add(exId))}
                     onExpand={() => setCollapsedExerciseIds((prev) => { const n = new Set(prev); n.delete(exId); return n; })}
+                    focusNewSetExerciseId={focusNewSetExerciseId}
+                    onClearFocusNewSet={() => setFocusNewSetExerciseId(null)}
                   />
                 ))}
               </div>
@@ -643,20 +644,20 @@ export function SessionEditScreen({
           ))
         )}
 
-        <div className="flex flex-col sm:flex-row gap-2 mb-20">
+        <div className="flex flex-col sm:flex-row gap-2">
           <button
             type="button"
             onClick={() => { setAddExerciseMode('normal'); setAddExerciseOpen(true); }}
-            className="flex-1 py-4 rounded-2xl bg-zinc-800/50 text-blue-400 font-bold text-lg hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-3.5 rounded-xl border-2 border-dashed border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-300 font-medium transition-colors flex items-center justify-center gap-2"
           >
-            <Plus className="w-6 h-6" />
+            <Plus className="w-5 h-5" />
             Добавить упражнение
           </button>
           {orderedExIds.length > 0 && (
             <button
               type="button"
               onClick={() => { setAddExerciseMode('superset'); setAddExerciseOpen(true); }}
-              className="flex-1 py-4 rounded-2xl bg-blue-600/30 text-blue-300 font-bold text-lg hover:bg-blue-600/50 transition-colors flex items-center justify-center gap-2 border border-blue-500/50"
+              className="flex-1 py-3.5 rounded-xl border border-blue-500/40 text-blue-400/90 hover:bg-blue-500/10 font-medium transition-colors flex items-center justify-center gap-2"
             >
               <Link2 className="w-5 h-5" />
               Добавить в суперсет
@@ -734,6 +735,8 @@ interface ExerciseBlockProps {
   isCollapsed?: boolean;
   onFinishExercise?: () => void;
   onExpand?: () => void;
+  focusNewSetExerciseId: string | null;
+  onClearFocusNewSet: () => void;
 }
 
 function ExerciseBlock({
@@ -756,6 +759,8 @@ function ExerciseBlock({
   isCollapsed = false,
   onFinishExercise,
   onExpand,
+  focusNewSetExerciseId,
+  onClearFocusNewSet,
 }: ExerciseBlockProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const ex = exerciseMap.get(exerciseId);
@@ -766,12 +771,12 @@ function ExerciseBlock({
 
   const header = (
     <div
-      className={`flex items-center justify-between px-4 py-3 bg-zinc-800/30 border-b border-zinc-800/50 ${isCollapsed ? 'border-b-0 cursor-pointer hover:bg-zinc-800/50' : ''}`}
+      className={`flex items-center justify-between px-1 py-2 border-b border-white/5 ${isCollapsed ? 'border-b-0 cursor-pointer hover:bg-white/[0.03]' : ''}`}
       onClick={isCollapsed ? onExpand : undefined}
       role={isCollapsed ? 'button' : undefined}
     >
       <div className="min-w-0 flex-1 pr-2">
-        <div className="font-bold text-lg text-white line-clamp-2 break-words leading-tight">{nameRu}</div>
+        <div className="font-bold text-base text-zinc-100 line-clamp-2 break-words leading-tight">{nameRu}</div>
         {nameEn && <div className="text-zinc-500 text-sm line-clamp-1 break-words mt-0.5">{nameEn}</div>}
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
@@ -779,43 +784,43 @@ function ExerciseBlock({
           <span className="text-zinc-500 text-xs mr-1">Развернуть</span>
         )}
         {isCollapsed ? (
-          <ChevronDown className="w-6 h-6 text-zinc-400" />
+          <ChevronDown className="w-5 h-5 text-zinc-400" />
         ) : (
           <div className="relative">
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
-              className="p-1.5 -mr-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
+              className="p-1.5 -mr-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
             >
-              <MoreHorizontal className="w-6 h-6" />
+              <MoreHorizontal className="w-5 h-5" />
             </button>
 
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl z-40 py-1 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-40 py-1 overflow-hidden">
                   {onFinishExercise && (
-                    <button onClick={() => { onFinishExercise(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                    <button onClick={() => { onFinishExercise(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Закончить упражнение
                     </button>
                   )}
                   {canMoveUp && (
-                    <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3">
+                    <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3">
                       <ArrowUp className="w-4 h-4 text-zinc-400" /> Переместить выше
                     </button>
                   )}
                   {canMoveDown && (
-                    <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                    <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
                       <ArrowDown className="w-4 h-4 text-zinc-400" /> Переместить ниже
                     </button>
                   )}
                   {onSplitFromSuperset && (
-                    <button onClick={() => { onSplitFromSuperset(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                    <button onClick={() => { onSplitFromSuperset(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
                       <Unlink className="w-4 h-4 text-blue-400" /> Убрать из суперсета
                     </button>
                   )}
                   {onMergeWithNext && (
-                    <button onClick={() => { onMergeWithNext(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-white hover:bg-zinc-700 flex items-center gap-3 border-b border-zinc-700/50">
+                    <button onClick={() => { onMergeWithNext(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
                       <Link2 className="w-4 h-4 text-blue-400" /> В суперсет со след.
                     </button>
                   )}
@@ -824,7 +829,7 @@ function ExerciseBlock({
                       if (confirm('Удалить упражнение из тренировки?')) onDeleteExercise(exerciseId);
                       setMenuOpen(false);
                     }}
-                    className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-900/30 flex items-center gap-3"
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"
                   >
                     <Trash2 className="w-4 h-4" /> Удалить упражнение
                   </button>
@@ -838,40 +843,42 @@ function ExerciseBlock({
   );
 
   return (
-    <div className="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800/80 overflow-hidden">
+    <div className="space-y-1 pb-6 border-b border-white/5 last:border-b-0">
       {header}
       {!isCollapsed && (
         <>
-          <div className="grid grid-cols-[28px_1fr_1fr_1fr_44px_36px] gap-2 px-3 py-2 text-[11px] font-semibold text-zinc-500 text-center uppercase tracking-wider">
-            <div>Сет</div>
+          <div className="grid grid-cols-[20px_1fr_1fr_1fr_36px_32px] gap-2 px-2 py-1.5 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center">
+            <div>№</div>
             <div>кг</div>
-            <div>Повт</div>
-            <div>Отдых</div>
-            <div><Check className="w-4 h-4 mx-auto" /></div>
+            <div>повт</div>
+            <div>отд</div>
+            <div><Check className="w-3 h-3 mx-auto" /></div>
             <div />
           </div>
 
-          <div className="px-2 pb-3 space-y-1.5">
+          <div className="space-y-0.5">
             {sets.map((row, index) => (
               <SetRowEdit
                 key={row.id}
                 row={row}
                 setDisplayNo={index + 1}
                 isDone={doneSets.has(row.id)}
+                shouldFocus={focusNewSetExerciseId === exerciseId && index === sets.length - 1}
+                onClearFocus={onClearFocusNewSet}
                 onToggleDone={() => onToggleSetDone(row.id, row.rest_s)}
                 onUpdate={(patch) => onUpdateSet(row.id, patch)}
                 onDelete={() => onDeleteSet(row.id)}
               />
             ))}
-
-            <button
-              type="button"
-              onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
-              className="w-full py-2.5 mt-2 rounded-xl bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-white font-medium text-sm flex items-center justify-center gap-1.5 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Добавить подход
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
+            className="w-full py-2 flex items-center justify-center gap-2 rounded-lg hover:bg-white/[0.04] text-blue-500/90 hover:text-blue-400 text-sm font-medium transition-colors mt-2"
+          >
+            <Plus className="w-4 h-4" /> Добавить подход
+          </button>
         </>
       )}
     </div>
@@ -880,21 +887,27 @@ function ExerciseBlock({
 
 interface SetRowEditProps {
   row: TrainingLogRaw;
-  /** Номер сета для отображения (1, 2, 3… без разрывов) */
   setDisplayNo: number;
   isDone: boolean;
+  shouldFocus?: boolean;
+  onClearFocus?: () => void;
   onToggleDone: () => void;
   onUpdate: (patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
   onDelete: () => void;
 }
 
-function SetRowEdit({ row, setDisplayNo, isDone, onToggleDone, onUpdate, onDelete }: SetRowEditProps) {
+function SetRowEdit({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggleDone, onUpdate, onDelete }: SetRowEditProps) {
   const [weight, setWeight] = useState(row.input_wt ? String(row.input_wt) : '');
   const [reps, setReps] = useState(row.reps ? String(row.reps) : '');
   const [rest, setRest] = useState(restSecToMin(row.rest_s ?? 0));
+  const weightRef = useRef<HTMLInputElement>(null);
 
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const startX = useRef<number | null>(null);
+  useEffect(() => {
+    if (shouldFocus && weightRef.current && onClearFocus) {
+      weightRef.current.focus();
+      onClearFocus();
+    }
+  }, [shouldFocus, onClearFocus]);
 
   useEffect(() => {
     setWeight(row.input_wt ? String(row.input_wt) : '');
@@ -906,7 +919,6 @@ function SetRowEdit({ row, setDisplayNo, isDone, onToggleDone, onUpdate, onDelet
     const inputWt = parseFloat(weight.replace(',', '.')) || 0;
     const repsNum = Math.floor(parseFloat(reps)) || 0;
     const restSec = parseRestMin(rest);
-
     if (inputWt !== row.input_wt || repsNum !== row.reps || restSec !== row.rest_s) {
       onUpdate({ input_wt: inputWt, reps: repsNum, rest_seconds: restSec });
     }
@@ -914,61 +926,32 @@ function SetRowEdit({ row, setDisplayNo, isDone, onToggleDone, onUpdate, onDelet
 
   const selectAll = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) return;
-    startX.current = e.touches[0].clientX;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (startX.current === null) return;
-    const dx = e.touches[0].clientX - startX.current;
-    if (dx < 0) {
-      setSwipeOffset(Math.max(-80, dx));
-    } else {
-      setSwipeOffset(0);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (swipeOffset < -50) {
-      onDelete();
-    }
-    setSwipeOffset(0);
-    startX.current = null;
-  };
-
-  const inputClass = `w-full h-10 text-center font-bold text-lg outline-none rounded-xl transition-colors ${
-    isDone ? 'bg-transparent text-zinc-500' : 'bg-zinc-800 text-white focus:bg-zinc-700 focus:ring-1 focus:ring-blue-500'
-  }`;
+  const baseInput = 'w-full bg-transparent text-center outline-none text-base font-medium placeholder-zinc-600 transition-colors py-1.5';
+  const activeText = 'text-white';
+  const doneText = 'text-zinc-500';
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-red-500/20">
-      <div className="absolute right-0 top-0 bottom-0 w-20 flex items-center justify-center">
-        <Trash2 className="text-red-500 w-5 h-5" />
+    <div className={`group grid grid-cols-[20px_1fr_1fr_1fr_36px_32px] gap-2 items-center px-2 py-1 rounded-lg transition-colors ${isDone ? 'bg-white/[0.03]' : ''}`}>
+      <div className={`text-[11px] text-center font-medium ${isDone ? 'text-zinc-600' : 'text-zinc-500'}`}>
+        {setDisplayNo}
       </div>
 
-      <div
-        className="grid grid-cols-[28px_1fr_1fr_1fr_44px_36px] gap-1.5 items-center px-1 py-0.5 bg-zinc-900 transition-transform duration-200 ease-out"
-        style={{ transform: `translateX(${swipeOffset}px)` }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <div className="text-center font-bold text-sm text-zinc-500">
-          {setDisplayNo}
-        </div>
-
+      <div className="relative">
         <input
+          ref={weightRef}
           type="number"
           inputMode="decimal"
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
           onBlur={flush}
           onFocus={selectAll}
-          placeholder="0"
-          className={inputClass}
+          placeholder="—"
+          className={`${baseInput} ${isDone ? doneText : activeText}`}
         />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 group-hover:bg-white/15 transition-colors" />
+      </div>
 
+      <div className="relative">
         <input
           type="number"
           inputMode="numeric"
@@ -976,51 +959,45 @@ function SetRowEdit({ row, setDisplayNo, isDone, onToggleDone, onUpdate, onDelet
           onChange={(e) => setReps(e.target.value)}
           onBlur={flush}
           onFocus={selectAll}
-          placeholder="0"
-          className={inputClass}
+          placeholder="—"
+          className={`${baseInput} ${isDone ? doneText : activeText}`}
         />
-
-        <div className="relative">
-          <input
-            type="text"
-            inputMode="decimal"
-            value={rest}
-            onChange={(e) => setRest(e.target.value)}
-            onBlur={flush}
-            onFocus={selectAll}
-            placeholder="0"
-            className={inputClass}
-          />
-          {rest && (
-            <span className={`absolute right-1 top-2.5 text-[10px] font-medium pointer-events-none ${isDone ? 'text-zinc-600' : 'text-zinc-500'}`}>
-              м
-            </span>
-          )}
-        </div>
-
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={onToggleDone}
-            className={`w-10 h-10 rounded-[14px] flex items-center justify-center transition-all ${
-              isDone ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-            }`}
-          >
-            <Check className="w-6 h-6" strokeWidth={isDone ? 3 : 2.5} />
-          </button>
-        </div>
-
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-            title="Удалить подход"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
-        </div>
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 group-hover:bg-white/15 transition-colors" />
       </div>
+
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={rest}
+          onChange={(e) => setRest(e.target.value)}
+          onBlur={flush}
+          onFocus={selectAll}
+          placeholder="—"
+          className={`${baseInput} ${isDone ? doneText : activeText}`}
+        />
+        {rest && <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[9px] text-zinc-600 pointer-events-none">м</span>}
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 group-hover:bg-white/15 transition-colors" />
+      </div>
+
+      <button
+        type="button"
+        onClick={onToggleDone}
+        className={`w-9 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+          isDone ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-zinc-400'
+        }`}
+      >
+        <Check className="w-4 h-4" strokeWidth={isDone ? 3 : 2} />
+      </button>
+
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-70 group-hover:opacity-100"
+        title="Удалить подход"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
     </div>
   );
 }
