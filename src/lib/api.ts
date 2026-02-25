@@ -92,18 +92,25 @@ export interface LastExerciseSnapshot {
   reps: number;
 }
 
+/**
+ * Порядок и группировка в training_logs (инварианты):
+ * - exercise_order — канонический порядок упражнения в сессии (0, 1, 2, …); один для всех подходов этого упражнения в сессии.
+ * - set_group_id — каноническая группировка (один блок «Завершить» / суперсет).
+ * - order_index — порядок строки внутри группы; при отображении set_no можно считать рангом по order_index внутри группы.
+ */
 export interface TrainingLogRaw {
   id: string;
   ts: string;
   /** NULL = черновик (подход ещё не «завершён») */
   completed_at: string | null;
-  /** ID тренировки из workout_sessions */
+  /** UUID сессии (workout_sessions.id) */
   session_id: string;
   /** Группа подходов (один «Завершить» / суперсет) */
   set_group_id: string;
   exercise_id: string;
   /** Порядок упражнения в тренировке (0, 1, 2, …) */
   exercise_order: number;
+  /** Номер подхода внутри группы (для отображения; канонический порядок внутри группы — order_index) */
   set_no: number;
   reps: number;
   input_wt: number;
