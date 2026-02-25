@@ -77,7 +77,8 @@ export default function App() {
     setExercisesRefreshTrigger((t) => t + 1);
   }, []);
 
-  const handleEditExercise = useCallback(() => {
+  const handleEditExercise = useCallback((exercise?: Exercise) => {
+    if (exercise != null) setSelectedExercise(exercise);
     setScreen('edit-exercise');
   }, []);
 
@@ -212,6 +213,7 @@ export default function App() {
         }}
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
         onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
+        onEditExercise={handleEditExercise}
       />
     );
   }

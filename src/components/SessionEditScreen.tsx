@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X, Flag } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X, Flag, Pencil } from 'lucide-react';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -21,6 +21,8 @@ export interface SessionEditScreenProps {
   openAddExerciseOnMount?: boolean;
   onAddExerciseOpenConsumed?: () => void;
   onAfterAddExercise?: (exercise: Exercise) => void;
+  /** Переход к редактированию упражнения (название, категория и т.д.) */
+  onEditExercise?: (exercise: Exercise) => void;
 }
 
 function restSecToMin(restS: number): string {
@@ -90,6 +92,7 @@ export function SessionEditScreen({
   openAddExerciseOnMount,
   onAddExerciseOpenConsumed,
   onAfterAddExercise,
+  onEditExercise,
 }: SessionEditScreenProps) {
   const [rows, setRows] = useState<TrainingLogRaw[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -633,6 +636,7 @@ export function SessionEditScreen({
                       canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
                       doneSets={doneSets}
                       onToggleSetDone={handleToggleSetDone}
+                      onEditExercise={onEditExercise ? () => { const ex = exerciseMap.get(exId); if (ex) onEditExercise!(ex); } : undefined}
                     />
                   );
                 })}
@@ -714,6 +718,7 @@ interface ExerciseBlockProps {
   canMoveDown: boolean;
   doneSets: Set<string>;
   onToggleSetDone: (setId: string, restSec: number) => void;
+  onEditExercise?: () => void;
 }
 
 function ExerciseBlock({
@@ -735,6 +740,7 @@ function ExerciseBlock({
   canMoveDown,
   doneSets,
   onToggleSetDone,
+  onEditExercise,
 }: ExerciseBlockProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -761,7 +767,10 @@ function ExerciseBlock({
           <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
             <Check className="w-4 h-4 text-emerald-500" />
           </div>
-          <h3 className="font-semibold text-zinc-300">{nameRu}</h3>
+          <h3 className="font-semibold text-zinc-300">
+            {nameRu}
+            {nameEn && <span className="text-zinc-500 font-normal ml-1.5 text-sm">/ {nameEn}</span>}
+          </h3>
         </div>
         <div className="text-zinc-500 text-sm font-medium bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800">
           {sets.length} подх.
@@ -773,7 +782,12 @@ function ExerciseBlock({
   return (
     <div className="space-y-3 bg-zinc-900/50 p-2 sm:p-3 rounded-3xl border border-zinc-800/50">
       <div className="flex items-center justify-between px-2 pt-1">
-        <h3 className="font-bold text-lg text-zinc-100 pr-2">{nameRu}</h3>
+        <h3 className="font-bold text-lg text-zinc-100 pr-2 truncate">
+          {nameRu}
+          {nameEn && (
+            <span className="text-zinc-500 font-normal ml-2 text-sm">/ {nameEn}</span>
+          )}
+        </h3>
         <div className="relative">
           <button
             type="button"
@@ -786,6 +800,11 @@ function ExerciseBlock({
             <>
               <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-40 py-1 overflow-hidden">
+                {onEditExercise && (
+                  <button type="button" onClick={() => { onEditExercise(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800">
+                    <Pencil className="w-4 h-4 text-zinc-500" /> Редактировать
+                  </button>
+                )}
                 {canMoveUp && (
                   <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3">
                     <ArrowUp className="w-4 h-4 text-zinc-500" /> Выше
