@@ -24,6 +24,7 @@ interface SessionGroup {
   date: string;
   durationMin: number;
   categoryNames: string[];
+  totalVolumeKg: number;
   rows: TrainingLogRaw[];
   exerciseIds: string[];
 }
@@ -72,11 +73,17 @@ function buildSessions(logs: TrainingLogRaw[], exercises: Exercise[]): SessionGr
       .map((slug) => getCategoryBySlug(slug)?.name)
       .filter(Boolean) as string[];
 
+    const totalVolumeKg = sorted.reduce(
+      (sum, r) => sum + ((r.effective_load ?? r.input_wt ?? 0) * (r.reps ?? 0)),
+      0
+    );
+
     sessions.push({
       sessionId,
       date: dateStr,
       durationMin,
       categoryNames,
+      totalVolumeKg,
       rows: sorted,
       exerciseIds,
     });
@@ -343,14 +350,20 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
                   className="w-full text-left px-4 py-3 flex items-center gap-3"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-zinc-400 text-sm">
+                    <div className="flex items-center gap-2 text-zinc-400 text-sm flex-wrap">
                       <Calendar className="w-4 h-4 flex-shrink-0" />
                       <span>{session.date}</span>
-                      <span>•</span>
-                      <span>{session.durationMin}м</span>
+                      {session.categoryNames.length > 0 && (
+                        <>
+                          <span>•</span>
+                          <span className="text-white font-medium">
+                            {session.categoryNames.join(' • ')}
+                          </span>
+                        </>
+                      )}
                     </div>
-                    <p className="font-semibold text-white mt-0.5">
-                      {session.categoryNames.length ? session.categoryNames.join(' • ') : '—'}
+                    <p className="text-zinc-500 text-sm mt-0.5">
+                      Общий объём: {session.totalVolumeKg.toLocaleString('ru-RU')} кг
                     </p>
                   </div>
                   {isExpanded ? (
@@ -424,18 +437,14 @@ export function HistoryScreen({ onBack, onEditSession }: HistoryScreenProps) {
                             </p>
                             <div className="space-y-1 pl-2">
                               {sortedSets.map((row) => {
-                                const inputKg = row.input_wt ?? 0;
                                 const effectiveKg = row.effective_load ?? row.input_wt ?? 0;
                                 const rest = restMin(row.rest_s);
                                 return (
                                   <div
                                     key={row.id}
-                                    className="flex justify-between items-baseline text-sm text-zinc-300 gap-2"
+                                    className="text-sm text-zinc-300"
                                   >
-                                    <span className="min-w-0">
-                                      {formatEffectiveKg(effectiveKg)} кг × {row.reps} повт, {rest}
-                                    </span>
-                                    <span className="text-zinc-500 flex-shrink-0">Input: {formatEffectiveKg(inputKg)} кг</span>
+                                    {formatEffectiveKg(effectiveKg)} кг × {row.reps} повт, {rest}
                                   </div>
                                 );
                               })}
