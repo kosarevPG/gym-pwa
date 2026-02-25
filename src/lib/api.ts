@@ -95,6 +95,8 @@ export interface LastExerciseSnapshot {
 export interface TrainingLogRaw {
   id: string;
   ts: string;
+  /** NULL = черновик (подход ещё не «завершён») */
+  completed_at: string | null;
   /** ID тренировки из workout_sessions */
   session_id: string;
   /** Группа подходов (один «Завершить» / суперсет) */
@@ -137,7 +139,8 @@ export interface SaveTrainingLogRow {
   one_rm?: number;
   volume?: number;
   effective_load?: number;
-  completed_at?: string;
+  /** NULL = черновик подхода (не участвует в аналитике и «последней сессии»). */
+  completed_at?: string | null;
 }
 
 /** Загрузить упражнения по категории из Supabase (старые строковые id игнорируются). */
@@ -301,6 +304,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     .from(TRAINING_LOGS_TABLE)
     .select(v2Select)
     .gte('created_at', sinceIso)
+    .not('completed_at', 'is', null)
     .order('created_at', { ascending: false })
     .limit(5000);
 
@@ -350,6 +354,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
     const legacyOut = (legacy.data ?? []).map((r) => ({
       id: String(r.id),
       ts: String(r.created_at),
+      completed_at: String(r.created_at),
       session_id: String((r as { session_id?: string }).session_id ?? r.set_group_id),
       set_group_id: String(r.set_group_id),
       exercise_id: String(r.exercise_id),
@@ -388,6 +393,7 @@ export async function fetchTrainingLogsWindow(days = 84): Promise<TrainingLogRaw
   return (v2.data ?? []).map((r) => ({
     id: String(r.id),
     ts: String(r.completed_at ?? r.created_at),
+    completed_at: r.completed_at != null ? String(r.completed_at) : null,
     session_id: String((r as { session_id?: string }).session_id ?? r.set_group_id),
     set_group_id: String(r.set_group_id),
     exercise_id: String(r.exercise_id),
@@ -427,6 +433,7 @@ export async function fetchExerciseHistory(
     .from(TRAINING_LOGS_TABLE)
     .select(v2Select)
     .eq('exercise_id', exerciseId)
+    .not('completed_at', 'is', null)
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -481,14 +488,15 @@ export async function fetchExerciseHistory(
   });
 }
 
-/** «Last» — последний подход последней по дате сессии. weight = input_wt (то, что вводил пользователь). */
+/** «Last» — последний подход последней по дате сессии (только завершённые). weight = input_wt (то, что вводил пользователь). */
 export async function fetchLastExerciseSnapshot(exerciseId: string): Promise<LastExerciseSnapshot | null> {
   const select = 'set_group_id, order_index, completed_at, created_at, input_wt, weight, reps';
   const { data, error } = await supabase
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
-    .order('completed_at', { ascending: false, nullsFirst: false })
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
     .limit(100);
 
   if (error || !data?.length) return null;
@@ -524,7 +532,8 @@ export async function fetchLastExerciseSessionSets(exerciseId: string): Promise<
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
-    .order('completed_at', { ascending: false, nullsFirst: false })
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
     .limit(50);
 
   if (err1 || !firstBatch?.length) return [];
@@ -589,7 +598,8 @@ export async function fetchLastExerciseSessionSetsForPrefill(exerciseId: string)
     .from(TRAINING_LOGS_TABLE)
     .select(select)
     .eq('exercise_id', exerciseId)
-    .order('completed_at', { ascending: false, nullsFirst: false })
+    .not('completed_at', 'is', null)
+    .order('completed_at', { ascending: false })
     .limit(50);
 
   if (err1 || !firstBatch?.length) return [];
@@ -814,7 +824,7 @@ export async function saveTrainingLogs(
     one_rm: r.one_rm != null ? Number(r.one_rm) : null,
     volume: r.volume != null ? Number(r.volume) : null,
     effective_load: r.effective_load != null ? Number(r.effective_load) : null,
-    completed_at: r.completed_at ?? new Date().toISOString(),
+    completed_at: r.completed_at === undefined ? new Date().toISOString() : r.completed_at,
   }));
 
   const v2 = await supabase.from(TRAINING_LOGS_TABLE).insert(v2Payload);
@@ -883,6 +893,7 @@ function mapRowToTrainingLogRaw(r: any): TrainingLogRaw {
   return {
     id: String(r.id),
     ts: String(r.completed_at ?? r.created_at),
+    completed_at: r.completed_at != null ? String(r.completed_at) : null,
     session_id: String(r.session_id ?? r.set_group_id),
     set_group_id: String(r.set_group_id),
     exercise_id: String(r.exercise_id),
@@ -935,6 +946,8 @@ export interface UpdateTrainingLogPayload {
   exercise_id?: string;
   set_volume?: number | null;
   effective_load?: number | null;
+  /** Установить при «завершении» черновика (первый ввод веса/повторов). */
+  completed_at?: string | null;
 }
 
 /** Обновить одну запись training_logs. */
@@ -957,6 +970,7 @@ export async function updateTrainingLog(
   if (payload.exercise_id !== undefined) body.exercise_id = payload.exercise_id;
   if (payload.set_volume !== undefined) body.set_volume = payload.set_volume;
   if (payload.effective_load !== undefined) body.effective_load = payload.effective_load;
+  if (payload.completed_at !== undefined) body.completed_at = payload.completed_at;
   if (Object.keys(body).length === 0) return { error: null };
   const { data, error } = await supabase.from(TRAINING_LOGS_TABLE).update(body).eq('id', id).select('id');
   // #region agent log
@@ -998,6 +1012,12 @@ export async function batchUpdateTrainingLogs(
 }
 
 // --- Workout sessions (сессионный подход: одна тренировка = одна запись) ---
+//
+// Семантика времени:
+// - Дата тренировки = дата сессии (workout_sessions.started_at, локальная дата пользователя).
+// - Время выполнения подхода = training_logs.completed_at (NULL = черновик, не в аналитике).
+// - Время записи в БД = training_logs.created_at (аудит). Для истории/PR/последней сессии используем completed_at.
+// Активная сессия: единственный источник истины — ended_at IS NULL (status храним для отображения, в БД CHECK синхронизирует).
 
 export interface WorkoutSessionRow {
   id: string;
@@ -1042,6 +1062,7 @@ export async function completeWorkoutSession(
   return { error: null };
 }
 
+/** Активная сессия: определяется только по ended_at IS NULL (источник истины). */
 export async function getActiveWorkoutSession(): Promise<WorkoutSessionRow | null> {
   const { data, error } = await supabase
     .from(WORKOUT_SESSIONS_TABLE)
@@ -1202,11 +1223,12 @@ export async function getWorkoutSummary(sessionId: string): Promise<WorkoutSumma
     Math.floor((new Date(ended).getTime() - new Date(started).getTime()) / 1000)
   );
 
-  // Логи по session_id (для backdated-тренировок логи имеют created_at=now, но session_id совпадает)
+  // Только завершённые подходы (черновики не входят в тоннаж и счётчик сетов)
   const logsRes = await supabase
     .from(TRAINING_LOGS_TABLE)
     .select('set_volume, created_at')
-    .eq('session_id', sessionId);
+    .eq('session_id', sessionId)
+    .not('completed_at', 'is', null);
   if (logsRes.error) return null;
 
   const rows = (logsRes.data ?? []) as Array<{ set_volume?: number | null; created_at?: string }>;

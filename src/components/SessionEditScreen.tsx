@@ -233,13 +233,17 @@ export function SessionEditScreen({
         : ex != null
           ? calcEffectiveLoadKg({ type, inputWt, bodyWt: row?.body_wt_snapshot ?? null, baseWt: ex.baseWeight ?? 0, multiplier })
           : inputWt;
+    const isDraft = row?.completed_at == null;
+    const finalizeDraft = isDraft && (patch.reps !== undefined || patch.input_wt !== undefined);
     const payload: Parameters<typeof updateTrainingLog>[1] = {
       ...patch,
       weight: effective,
       effective_load: effective,
       set_volume: effective * Math.max(0, repsNum),
+      ...(finalizeDraft && { completed_at: new Date().toISOString() }),
     };
 
+    const nowIso = finalizeDraft ? new Date().toISOString() : null;
     setRows((prev) =>
       prev.map((r) => {
         if (r.id !== id) return r;
@@ -249,6 +253,7 @@ export function SessionEditScreen({
           ...(patch.effective_load !== undefined && { effective_load: patch.effective_load }),
           ...(patch.reps !== undefined && { reps: patch.reps }),
           ...(patch.rest_seconds !== undefined && { rest_s: patch.rest_seconds }),
+          ...(nowIso && { completed_at: nowIso, ts: nowIso }),
           effective_load: effective,
         };
       })
@@ -398,7 +403,7 @@ export function SessionEditScreen({
               input_wt: 0,
               effective_load: 0,
               rest_seconds: 0,
-              completed_at: firstTs,
+              completed_at: null,
             },
           ];
 

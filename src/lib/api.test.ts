@@ -21,6 +21,7 @@ beforeEach(async () => {
   fromMock.mockReturnValue({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    not: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
@@ -34,6 +35,7 @@ describe('fetchLastExerciseSnapshot', () => {
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({ data: [], error: null }),
     });
@@ -45,6 +47,7 @@ describe('fetchLastExerciseSnapshot', () => {
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({
         data: [
@@ -67,6 +70,7 @@ describe('fetchLastExerciseSessionSets', () => {
     fromMock.mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
+      not: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue({
         data: [
