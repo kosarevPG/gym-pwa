@@ -68,6 +68,16 @@ export default function App() {
     setSelectedExercise(null);
   }, []);
 
+  /** Вернуть текущую активную сессию или создать новую (авто-старт тренировки из меню Упражнения). */
+  const ensureWorkoutSession = useCallback(async (): Promise<string> => {
+    const active = await getActiveWorkoutSession();
+    if (active) return active.id;
+    const result = await createWorkoutSession();
+    if ('error' in result) throw new Error(result.error.message);
+    setSessionId(result.id);
+    return result.id;
+  }, []);
+
   /** Выбор упражнения из списка: добавляем в текущую/новую сессию и открываем экран «Текущая тренировка» (новая карточка). */
   const openExerciseDetail = useCallback(
     async (exercise: Exercise) => {
@@ -116,16 +126,6 @@ export default function App() {
     setScreen('exercises');
     setSelectedExercise(null);
     setExercisesRefreshTrigger((t) => t + 1);
-  }, []);
-
-  /** Вернуть текущую активную сессию или создать новую (авто-старт тренировки из меню Упражнения). */
-  const ensureWorkoutSession = useCallback(async (): Promise<string> => {
-    const active = await getActiveWorkoutSession();
-    if (active) return active.id;
-    const result = await createWorkoutSession();
-    if ('error' in result) throw new Error(result.error.message);
-    setSessionId(result.id);
-    return result.id;
   }, []);
 
   const handleCategorySelect = useCallback(
