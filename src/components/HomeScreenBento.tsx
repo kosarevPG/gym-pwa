@@ -208,7 +208,10 @@ export function HomeScreenBento({
   const currentWeekCount = insights?.currentWeekCount ?? 0;
   const weeklyRatio = Math.min(1, currentWeekCount / Math.max(1, weeklyTarget));
   const weekVolumeKg = insights?.currentWeekVolume ?? insights?.currentWeekVolumeRaw ?? 0;
-  const weekVolumeTons = (weekVolumeKg / 1000).toFixed(1);
+  const volumeDisplay =
+    weekVolumeKg >= 10000
+      ? `${(weekVolumeKg / 1000).toFixed(1)} т`
+      : `${Math.round(weekVolumeKg).toLocaleString('ru-RU')} кг`;
   const weeklyLoadState = insights?.weeklyLoadState;
   const volumeTrend = weeklyLoadState === 'up' ? '+ к прошлой нед.' : weeklyLoadState === 'down' ? '− к прошлой нед.' : 'как прошлая нед.';
 
@@ -433,8 +436,7 @@ export function HomeScreenBento({
                   <span className="text-xs font-medium uppercase">Тоннаж</span>
                 </div>
                 <div>
-                  <span className="text-2xl font-mono font-bold text-white">{weekVolumeTons}</span>
-                  <span className="text-sm text-zinc-500 ml-1">т</span>
+                  <span className="text-2xl font-mono font-bold text-white">{volumeDisplay}</span>
                 </div>
                 <div className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" />
@@ -450,6 +452,7 @@ export function HomeScreenBento({
                 <div>
                   <div className="text-lg font-bold text-white leading-tight">{alert.title}</div>
                   <div className="text-xs text-zinc-500 mt-1">{alert.description || 'Готов к нагрузке'}</div>
+                  <div className="text-[10px] text-zinc-600 mt-0.5">По текущим тренировкам</div>
                 </div>
                 <div className="w-full bg-zinc-800 h-1.5 rounded-full mt-2 overflow-hidden">
                   <div

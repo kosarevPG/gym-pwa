@@ -25,15 +25,10 @@ export default function App() {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionDate, setEditingSessionDate] = useState<string | undefined>(undefined);
   const [openAddExerciseWhenSessionEdit, setOpenAddExerciseWhenSessionEdit] = useState(false);
-  /** true = зашли в редактирование сессии после «Завершить упражнение» (назад — в категории). */
-  const [sessionEditFromWorkout, setSessionEditFromWorkout] = useState(false);
-  /** true = зашли в «Текущая тренировка» с главной по кнопке «Продолжить» (назад — на главную). */
-  const [sessionEditFromHome, setSessionEditFromHome] = useState(false);
   /** С какого экрана открыли историю упражнения (назад вернёмся туда). */
   const [historyFromScreen, setHistoryFromScreen] = useState<Screen | null>(null);
   /** Упражнение, которое нужно добавить в сессию при открытии экрана текущей тренировки (из меню Упражнения). */
   const [exerciseToAddOnMount, setExerciseToAddOnMount] = useState<Exercise | null>(null);
-  const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
 
@@ -51,16 +46,6 @@ export default function App() {
     setSelectedCategory(null);
     setSelectedExercise(null);
   }, []);
-
-  const resumeOrOpenCategories = useCallback(() => {
-    if (lastExerciseInSession) {
-      setSelectedExercise(lastExerciseInSession.exercise);
-      setSelectedCategory(lastExerciseInSession.category);
-      setScreen('exercise-detail');
-    } else {
-      openCategories();
-    }
-  }, [lastExerciseInSession, openCategories]);
 
   const openExercises = useCallback((category: Category) => {
     setSelectedCategory(category);
@@ -86,8 +71,6 @@ export default function App() {
         setSessionId(sid);
         setEditingSessionId(sid);
         setExerciseToAddOnMount(exercise);
-        setSessionEditFromWorkout(true);
-        setSessionEditFromHome(false);
         setOpenAddExerciseWhenSessionEdit(false);
         setScreen('session-edit');
       } catch (e) {
@@ -158,12 +141,9 @@ export default function App() {
         sessionId={sessionId}
         onBack={() => setScreen('exercises')}
         onComplete={() => {
-          setLastExerciseInSession(null);
           setEditingSessionId(sessionId);
           setEditingSessionDate(undefined);
           setOpenAddExerciseWhenSessionEdit(true);
-          setSessionEditFromWorkout(true);
-          setSessionEditFromHome(false);
           setScreen('session-edit');
         }}
         onEnsureSession={ensureWorkoutSession}
@@ -215,8 +195,6 @@ export default function App() {
         onEditSession={(sid, date) => {
           setEditingSessionId(sid);
           setEditingSessionDate(date);
-          setSessionEditFromWorkout(false);
-          setSessionEditFromHome(false);
           setOpenAddExerciseWhenSessionEdit(false);
           setScreen('session-edit');
         }}
@@ -230,15 +208,11 @@ export default function App() {
         sessionId={editingSessionId}
         sessionDate={editingSessionDate}
         onBack={() => {
-          const fromHome = sessionEditFromHome;
-          const fromWorkout = sessionEditFromWorkout;
           setEditingSessionId(null);
           setEditingSessionDate(undefined);
           setOpenAddExerciseWhenSessionEdit(false);
-          setSessionEditFromWorkout(false);
-          setSessionEditFromHome(false);
           setExerciseToAddOnMount(null);
-          setScreen(fromHome ? 'home' : fromWorkout ? 'categories' : 'history');
+          setScreen('home');
         }}
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
         onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
@@ -281,7 +255,7 @@ export default function App() {
   if (screen === 'home') {
     return (
       <HomeScreenBento
-        onOpenExercises={resumeOrOpenCategories}
+        onOpenExercises={openCategories}
         onOpenAnalytics={() => setScreen('analytics')}
         onOpenHistory={() => setScreen('history')}
         onSessionStarted={(id) => {
@@ -290,15 +264,12 @@ export default function App() {
         }}
         onWorkoutFinished={(id) => {
           setSummarySessionId(id);
-          setLastExerciseInSession(null);
           setScreen('summary');
         }}
         onOpenCurrentSession={(id) => {
           setEditingSessionId(id);
           setEditingSessionDate(undefined);
           setOpenAddExerciseWhenSessionEdit(false);
-          setSessionEditFromWorkout(false);
-          setSessionEditFromHome(true);
           setScreen('session-edit');
         }}
       />
