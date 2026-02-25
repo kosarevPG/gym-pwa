@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X, Flag, Pencil, History } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, X, Flag, Pencil, History } from 'lucide-react';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -21,13 +21,9 @@ export interface SessionEditScreenProps {
   openAddExerciseOnMount?: boolean;
   onAddExerciseOpenConsumed?: () => void;
   onAfterAddExercise?: (exercise: Exercise) => void;
-  /** Переход к редактированию упражнения (название, категория и т.д.) */
   onEditExercise?: (exercise: Exercise) => void;
-  /** Переход к истории подходов по упражнению */
   onOpenExerciseHistory?: (exercise: Exercise) => void;
-  /** Упражнение, которое нужно добавить в сессию при первом открытии (из меню Упражнения). */
   exerciseToAddOnMount?: Exercise | null;
-  /** Вызывается после добавления exerciseToAddOnMount в сессию. */
   onExerciseAddedToSession?: () => void;
 }
 
@@ -107,9 +103,7 @@ export function SessionEditScreen({
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
-  /** 'superset' = следующий выбранный упражнение добавится в суперсет с последним */
   const [addExerciseMode, setAddExerciseMode] = useState<'normal' | 'superset'>('normal');
   const didOpenAddExerciseOnMount = useRef(false);
   const addedExerciseIdOnMountRef = useRef<string | null>(null);
@@ -120,7 +114,6 @@ export function SessionEditScreen({
   const [stopwatchElapsedMs, setStopwatchElapsedMs] = useState(0);
 
   const [doneSets, setDoneSets] = useState<Set<string>>(new Set());
-  /** После добавления подхода — фокус на поле «Вес» нового сета этого упражнения */
   const [focusNewSetExerciseId, setFocusNewSetExerciseId] = useState<string | null>(null);
 
   const loadSession = (silent = false) => {
@@ -133,12 +126,10 @@ export function SessionEditScreen({
       const rowIds = new Set(logList.map((r) => r.id));
       setDoneSets((prev) => {
         const next = new Set<string>();
-        // сохраняем только те галочки, для которых ещё есть строки
         prev.forEach((id) => {
           if (rowIds.has(id)) next.add(id);
         });
 
-        // для прошедших тренировок (есть дата) можно автопометить «сделанными» старые подходы
         if (sessionDate) {
           logList.forEach((r) => {
             const hasLoad = (r.effective_load ?? r.input_wt ?? 0) > 0;
@@ -148,10 +139,6 @@ export function SessionEditScreen({
 
         return next;
       });
-
-      // #region agent log
-      if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7243/ingest/130ec4b2-2362-4843-83f6-f116f6403005',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SessionEditScreen.tsx:loadSession',message:'session state set',data:{sessionId,rowsCount:logList.length},timestamp:Date.now(),hypothesisId:'H1,H5'})}).catch(()=>{});
-      // #endregion
     });
   };
 
@@ -244,13 +231,7 @@ export function SessionEditScreen({
       patch.effective_load !== undefined
         ? patch.effective_load
         : ex != null
-          ? calcEffectiveLoadKg({
-              type,
-              inputWt,
-              bodyWt: row?.body_wt_snapshot ?? null,
-              baseWt: ex.baseWeight ?? 0,
-              multiplier,
-            })
+          ? calcEffectiveLoadKg({ type, inputWt, bodyWt: row?.body_wt_snapshot ?? null, baseWt: ex.baseWeight ?? 0, multiplier })
           : inputWt;
     const payload: Parameters<typeof updateTrainingLog>[1] = {
       ...patch,
@@ -433,7 +414,6 @@ export function SessionEditScreen({
     if (addedEx) onAfterAddExercise?.(addedEx);
   };
 
-  /** Добавить упражнение при открытии из меню Упражнения (exerciseToAddOnMount). */
   useEffect(() => {
     if (!exerciseToAddOnMount) {
       addedExerciseIdOnMountRef.current = null;
@@ -447,7 +427,6 @@ export function SessionEditScreen({
     });
   }, [exerciseToAddOnMount, loading]);
 
-  /** Добавить упражнение следующим в суперсет (после последнего в списке). */
   const handleAddExerciseToSuperset = async (exerciseId: string) => {
     if (orderedExIds.length === 0) return;
     const afterExId = orderedExIds[orderedExIds.length - 1];
@@ -559,16 +538,14 @@ export function SessionEditScreen({
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    const hundredths = Math.floor((ms % 1000) / 10);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}:${hundredths.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const formatElapsedMs = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-    const hundredths = Math.floor((ms % 1000) / 10);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}:${hundredths.toString().padStart(2, '0')}`;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const title = sessionDate ? `Редактирование ${sessionDate}` : 'Текущая тренировка';
@@ -660,8 +637,8 @@ export function SessionEditScreen({
                       canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
                       doneSets={doneSets}
                       onToggleSetDone={handleToggleSetDone}
-                      onEditExercise={onEditExercise ? () => { const ex = exerciseMap.get(exId); if (ex) onEditExercise!(ex); } : undefined}
-                      onOpenHistory={onOpenExerciseHistory ? () => { const ex = exerciseMap.get(exId); if (ex) onOpenExerciseHistory!(ex); } : undefined}
+                      onEditExercise={onEditExercise ? () => { const ex = exerciseMap.get(exId); if (ex) onEditExercise(ex); } : undefined}
+                      onOpenHistory={onOpenExerciseHistory ? () => { const ex = exerciseMap.get(exId); if (ex) onOpenExerciseHistory(ex); } : undefined}
                     />
                   );
                 })}
@@ -724,6 +701,7 @@ export function SessionEditScreen({
   );
 }
 
+// Интерфейс соответствует передаваемым пропсам из SessionEditScreen
 interface ExerciseBlockProps {
   exerciseId: string;
   sets: TrainingLogRaw[];
