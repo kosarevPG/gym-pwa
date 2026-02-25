@@ -413,6 +413,7 @@ export function SessionEditScreen({
     }
     setAddExerciseOpen(false);
     setAddExerciseMode('normal');
+    setCollapsedExerciseIds((prev) => new Set([...prev, ...orderedExIds]));
     loadSession(true);
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
@@ -466,6 +467,7 @@ export function SessionEditScreen({
     }
     setAddExerciseOpen(false);
     setAddExerciseMode('normal');
+    setCollapsedExerciseIds((prev) => new Set([...prev, ...orderedExIds]));
     loadSession(true);
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
@@ -840,12 +842,13 @@ function ExerciseBlock({
       {header}
       {!isCollapsed && (
         <>
-          <div className="grid grid-cols-[28px_1fr_1fr_1fr_44px] gap-2 px-3 py-2 text-[11px] font-semibold text-zinc-500 text-center uppercase tracking-wider">
+          <div className="grid grid-cols-[28px_1fr_1fr_1fr_44px_36px] gap-2 px-3 py-2 text-[11px] font-semibold text-zinc-500 text-center uppercase tracking-wider">
             <div>Сет</div>
             <div>кг</div>
             <div>Повт</div>
             <div>Отдых</div>
             <div><Check className="w-4 h-4 mx-auto" /></div>
+            <div />
           </div>
 
           <div className="px-2 pb-3 space-y-1.5">
@@ -942,7 +945,7 @@ function SetRowEdit({ row, isDone, onToggleDone, onUpdate, onDelete }: SetRowEdi
       </div>
 
       <div
-        className="grid grid-cols-[28px_1fr_1fr_1fr_44px] gap-1.5 items-center px-1 py-0.5 bg-zinc-900 transition-transform duration-200 ease-out"
+        className="grid grid-cols-[28px_1fr_1fr_1fr_44px_36px] gap-1.5 items-center px-1 py-0.5 bg-zinc-900 transition-transform duration-200 ease-out"
         style={{ transform: `translateX(${swipeOffset}px)` }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -1001,6 +1004,17 @@ function SetRowEdit({ row, isDone, onToggleDone, onUpdate, onDelete }: SetRowEdi
             }`}
           >
             <Check className="w-6 h-6" strokeWidth={isDone ? 3 : 2.5} />
+          </button>
+        </div>
+
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+            title="Удалить подход"
+          >
+            <Trash2 className="w-5 h-5" />
           </button>
         </div>
       </div>
