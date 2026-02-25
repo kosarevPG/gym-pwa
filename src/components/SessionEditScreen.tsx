@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X, Flag } from 'lucide-react';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -548,17 +548,17 @@ export function SessionEditScreen({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <main className="p-4 text-zinc-400">Загрузка…</main>
+      <div className="min-h-screen bg-zinc-950 text-zinc-400 flex items-center justify-center">
+        <main className="p-4">Загрузка…</main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pb-safe flex flex-col">
-      <header className="sticky top-0 z-20 bg-black/95 backdrop-blur border-b border-white/5 px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-zinc-950 text-zinc-200 pb-safe flex flex-col">
+      <header className="sticky top-0 z-20 bg-zinc-950/80 backdrop-blur-md border-b border-white/5 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-colors flex-shrink-0">
+          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors flex-shrink-0">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="min-w-0 flex-1">
@@ -588,10 +588,8 @@ export function SessionEditScreen({
           }}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-full font-mono text-sm font-medium transition-all ${
             restEndAt !== null && restRemainingMs > 0
-              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-              : stopwatchStartedAt !== null || stopwatchElapsedMs > 0
-                ? 'bg-white/10 text-white border border-white/10'
-                : 'bg-white/5 border border-white/10 text-zinc-400 hover:text-zinc-300'
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:bg-zinc-800'
           }`}
         >
           <Timer className="w-4 h-4 flex-shrink-0" />
@@ -599,9 +597,9 @@ export function SessionEditScreen({
         </button>
       </header>
 
-      <main className="flex-1 px-4 pt-4 pb-32 space-y-6 max-w-lg mx-auto w-full">
+      <main className="flex-1 px-3 sm:px-4 pt-4 space-y-6 max-w-lg mx-auto w-full">
         {runs.length === 0 ? (
-          <div className="text-center py-16 text-zinc-500">Тренировка пуста.</div>
+          <div className="text-center py-20 text-zinc-500">Пустая тренировка</div>
         ) : (
           runs.map((run, runIdx) => (
             <div key={run.superset ? `superset-${runIdx}` : `solo-${runIdx}`} className="relative">
@@ -609,7 +607,7 @@ export function SessionEditScreen({
                 <div className="absolute -left-1 top-2 bottom-2 w-0.5 bg-blue-500/50 rounded-full z-0" />
               )}
 
-              <div className={run.superset ? 'pl-4 space-y-8' : 'space-y-8'}>
+              <div className={run.superset ? 'pl-4 space-y-6' : 'space-y-6'}>
                 {run.exIds.map((exId, idx) => {
                   const isLastInRun = idx === run.exIds.length - 1;
                   const hasNextRun = runIdx < runs.length - 1;
@@ -643,70 +641,53 @@ export function SessionEditScreen({
           ))
         )}
 
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex gap-3 pb-20 pt-4">
           <button
             type="button"
             onClick={() => { setAddExerciseMode('normal'); setAddExerciseOpen(true); }}
-            className="flex-1 py-3.5 rounded-xl border-2 border-dashed border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-300 font-medium transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Plus className="w-5 h-5" />
             Добавить упражнение
           </button>
-          {orderedExIds.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { setAddExerciseMode('superset'); setAddExerciseOpen(true); }}
-              className="flex-1 py-3.5 rounded-xl border border-blue-500/40 text-blue-400/90 hover:bg-blue-500/10 font-medium transition-colors flex items-center justify-center gap-2"
-            >
-              <Link2 className="w-5 h-5" />
-              Добавить в суперсет
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex-1 py-4 rounded-2xl bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
+          >
+            <Flag className="w-5 h-5 fill-current" />
+            Закончить
+          </button>
         </div>
       </main>
 
       {addExerciseOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-end p-4"
-          onClick={() => { setAddExerciseOpen(false); setAddExerciseMode('normal'); }}
-        >
-          <div
-            className="w-full max-w-lg max-h-[80vh] bg-zinc-900 rounded-t-3xl p-4 shadow-xl overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-xl font-bold mb-2 text-center">
-              {addExerciseMode === 'superset' ? 'Добавить следующим в суперсет' : 'Выберите упражнение'}
+        <div className="fixed inset-0 z-50 bg-black/80 flex flex-col pt-12 backdrop-blur-sm">
+          <div className="px-4 pb-4 border-b border-white/10 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">
+              {addExerciseMode === 'superset' ? 'Добавить в суперсет' : 'Выбор упражнения'}
             </h2>
-            {addExerciseMode === 'superset' && orderedExIds.length > 0 && (
-              <p className="text-zinc-500 text-sm text-center mb-4">
-                После: {exerciseMap.get(orderedExIds[orderedExIds.length - 1])?.nameRu ?? ''}
-              </p>
-            )}
-            <div className="overflow-y-auto flex-1 space-y-1">
-              {exercises.map((ex) => (
-                <button
-                  key={ex.id}
-                  type="button"
-                  onClick={() => addExerciseMode === 'superset' ? handleAddExerciseToSuperset(ex.id) : handleAddExercise(ex.id)}
-                  className="w-full text-left px-4 py-4 rounded-2xl hover:bg-zinc-800 transition-colors flex items-center gap-3 border border-transparent hover:border-zinc-700"
-                >
-                  <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                    <Play className="w-5 h-5 text-zinc-400 ml-1" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-white">{ex.nameRu}</div>
-                    {ex.nameEn && <div className="text-zinc-500 text-xs truncate">{ex.nameEn}</div>}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => { setAddExerciseOpen(false); setAddExerciseMode('normal'); }}
-              className="mt-4 py-4 rounded-2xl bg-zinc-800 text-white font-bold w-full"
-            >
-              Отмена
+            <button type="button" onClick={() => { setAddExerciseOpen(false); setAddExerciseMode('normal'); }} className="p-2 bg-zinc-800 rounded-full text-zinc-400 hover:text-white">
+              <X className="w-5 h-5" />
             </button>
+          </div>
+          {addExerciseMode === 'superset' && orderedExIds.length > 0 && (
+            <p className="px-4 py-2 text-zinc-500 text-sm">
+              После: {exerciseMap.get(orderedExIds[orderedExIds.length - 1])?.nameRu ?? ''}
+            </p>
+          )}
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {exercises.map((ex) => (
+              <button
+                key={ex.id}
+                type="button"
+                onClick={() => addExerciseMode === 'superset' ? handleAddExerciseToSuperset(ex.id) : handleAddExercise(ex.id)}
+                className="w-full text-left p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-600 hover:bg-zinc-800 transition-all"
+              >
+                <div className="font-medium text-zinc-200">{ex.nameRu}</div>
+                {ex.nameEn && <div className="text-xs text-zinc-500">{ex.nameEn}</div>}
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -774,46 +755,55 @@ function ExerciseBlock({
     return (
       <div
         onClick={() => setIsCollapsed(false)}
-        className="flex items-center justify-between px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl cursor-pointer hover:bg-emerald-500/20 transition-colors"
+        className="flex items-center justify-between px-4 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition-all"
       >
         <div className="flex items-center gap-3">
-          <Check className="w-5 h-5 text-emerald-500" />
+          <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <Check className="w-4 h-4 text-emerald-500" />
+          </div>
           <h3 className="font-semibold text-zinc-300">{nameRu}</h3>
         </div>
-        <div className="text-zinc-500 text-sm font-medium">
-          {sets.length} подходов
+        <div className="text-zinc-500 text-sm font-medium bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800">
+          {sets.length} подх.
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 pb-6 border-b border-white/5 last:border-b-0">
-      <div className="flex items-center justify-between px-1">
-        <div className="min-w-0 flex-1 pr-2">
-          <h3 className="font-bold text-base text-zinc-100 leading-tight">{nameRu}</h3>
-          {nameEn && <div className="text-zinc-500 text-sm truncate mt-0.5">{nameEn}</div>}
-        </div>
-        <div className="relative flex-shrink-0">
+    <div className="space-y-3 bg-zinc-900/50 p-2 sm:p-3 rounded-3xl border border-zinc-800/50">
+      <div className="flex items-center justify-between px-2 pt-1">
+        <h3 className="font-bold text-lg text-zinc-100 pr-2">{nameRu}</h3>
+        <div className="relative">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
-            className="p-1.5 -mr-1.5 rounded-lg text-zinc-500 hover:bg-white/10 hover:text-white transition-colors"
+            className="p-1.5 -mr-1.5 rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 transition-colors"
           >
-            <MoreHorizontal className="w-5 h-5" />
+            <MoreHorizontal className="w-6 h-6" />
           </button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-40 py-1 overflow-hidden">
+              <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-40 py-1 overflow-hidden">
                 {canMoveUp && (
-                  <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3">
-                    <ArrowUp className="w-4 h-4 text-zinc-400" /> Выше
+                  <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3">
+                    <ArrowUp className="w-4 h-4 text-zinc-500" /> Выше
                   </button>
                 )}
                 {canMoveDown && (
-                  <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
-                    <ArrowDown className="w-4 h-4 text-zinc-400" /> Ниже
+                  <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800">
+                    <ArrowDown className="w-4 h-4 text-zinc-500" /> Ниже
+                  </button>
+                )}
+                {onSplitFromSuperset && (
+                  <button onClick={() => { onSplitFromSuperset(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800">
+                    <Unlink className="w-4 h-4 text-blue-500" /> Разбить суперсет
+                  </button>
+                )}
+                {onMergeWithNext && (
+                  <button onClick={() => { onMergeWithNext(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800">
+                    <Link2 className="w-4 h-4 text-blue-500" /> В суперсет
                   </button>
                 )}
                 <button
@@ -821,9 +811,9 @@ function ExerciseBlock({
                     if (confirm('Удалить упражнение из тренировки?')) onDeleteExercise(exerciseId);
                     setMenuOpen(false);
                   }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"
+                  className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-900/10 flex items-center gap-3"
                 >
-                  <Trash2 className="w-4 h-4" /> Удалить упражнение
+                  <Trash2 className="w-4 h-4" /> Удалить
                 </button>
               </div>
             </>
@@ -832,7 +822,7 @@ function ExerciseBlock({
       </div>
 
       <div className="space-y-1">
-        <div className="grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 px-2 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center">
+        <div className="grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 px-2 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center pb-1">
           <div>№</div>
           <div>кг</div>
           <div>повт</div>
@@ -854,54 +844,34 @@ function ExerciseBlock({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 pt-2 px-1">
-        <button
-          type="button"
-          onClick={handleDeleteLastSet}
-          disabled={sets.length === 0}
-          className="w-[3.25rem] h-11 bg-zinc-900/50 text-red-400 hover:bg-red-500/20 border border-zinc-800/80 rounded-xl flex items-center justify-center transition-colors disabled:opacity-30"
-          title="Удалить последний подход"
-        >
-          <Minus className="w-5 h-5" />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
-          className="w-[3.25rem] h-11 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl flex items-center justify-center transition-colors"
-          title="Добавить подход"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
-
-        {onSplitFromSuperset ? (
+      <div className="flex items-center gap-3 pt-3 px-1">
+        <div className="flex items-center bg-zinc-800 rounded-xl overflow-hidden h-12 border border-zinc-700/50">
           <button
             type="button"
-            onClick={onSplitFromSuperset}
-            className="w-[3.25rem] h-11 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 rounded-xl flex items-center justify-center transition-colors"
-            title="Убрать из суперсета"
+            onClick={handleDeleteLastSet}
+            disabled={sets.length === 0}
+            className="w-12 h-full flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-zinc-700 disabled:opacity-30 transition-colors"
+            title="Удалить последний подход"
           >
-            <Unlink className="w-4 h-4" />
+            <Minus className="w-5 h-5" />
           </button>
-        ) : onMergeWithNext ? (
-          <button
-            type="button"
-            onClick={onMergeWithNext}
-            className="w-[3.25rem] h-11 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800 hover:text-white border border-zinc-800/80 rounded-xl flex items-center justify-center transition-colors"
-            title="Объединить в суперсет со следующим"
-          >
-            <Link2 className="w-4 h-4" />
-          </button>
-        ) : (
-          <div className="w-[3.25rem] h-11 bg-zinc-900/20 text-zinc-600 border border-zinc-800/30 rounded-xl flex items-center justify-center pointer-events-none">
-            <Link2 className="w-4 h-4 opacity-50" />
+          <div className="px-1 text-xs font-medium text-zinc-500 uppercase tracking-wide select-none">
+            сет
           </div>
-        )}
+          <button
+            type="button"
+            onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
+            className="w-12 h-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
+            title="Добавить подход"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
 
         <button
           type="button"
           onClick={() => setIsCollapsed(true)}
-          className="flex-1 h-11 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl flex items-center justify-center gap-2 font-medium transition-colors"
+          className="flex-1 h-12 bg-zinc-800 text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 border border-zinc-700/50 rounded-xl flex items-center justify-center gap-2 font-medium transition-all"
         >
           <Check className="w-5 h-5" />
           <span>Готово</span>
@@ -949,13 +919,13 @@ function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggle
     }
   };
 
-  const baseInput = 'w-full bg-transparent text-center outline-none text-base font-medium placeholder-zinc-600 transition-colors py-1.5';
-  const activeText = 'text-white';
-  const doneText = 'text-zinc-500';
+  const baseInput = 'w-full bg-transparent text-center outline-none text-lg font-medium placeholder-zinc-700 transition-colors';
+  const activeText = 'text-zinc-200';
+  const doneText = 'text-zinc-600';
 
   return (
-    <div className={`group grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 items-center px-2 py-1.5 rounded-xl transition-colors ${isDone ? 'bg-zinc-900/30' : ''}`}>
-      <div className={`text-xs text-center font-medium ${isDone ? 'text-zinc-600' : 'text-zinc-400'}`}>
+    <div className={`group grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 items-center px-2 py-2 rounded-xl transition-colors ${isDone ? 'bg-zinc-900/50' : 'bg-transparent'}`}>
+      <div className={`text-xs text-center font-medium ${isDone ? 'text-zinc-700' : 'text-zinc-500'}`}>
         {setDisplayNo}
       </div>
 
@@ -969,9 +939,9 @@ function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggle
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} ${isDone ? doneText : activeText}`}
+          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
         />
-        <div className="absolute bottom-0 left-2 right-2 h-px bg-zinc-800 transition-colors" />
+        <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
       </div>
 
       <div className="relative">
@@ -983,9 +953,9 @@ function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggle
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} ${isDone ? doneText : activeText}`}
+          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
         />
-        <div className="absolute bottom-0 left-2 right-2 h-px bg-zinc-800 transition-colors" />
+        <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
       </div>
 
       <div className="relative">
@@ -997,17 +967,17 @@ function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggle
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} ${isDone ? doneText : activeText}`}
+          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
         />
-        {rest && <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[9px] text-zinc-600 pointer-events-none">м</span>}
-        <div className="absolute bottom-0 left-2 right-2 h-px bg-zinc-800 transition-colors" />
+        {rest && <span className={`absolute right-0 top-1.5 text-[9px] pointer-events-none ${isDone ? 'text-zinc-700' : 'text-zinc-600'}`}>м</span>}
+        <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
       </div>
 
       <button
         type="button"
         onClick={() => onToggleDone()}
-        className={`w-10 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
-          isDone ? 'bg-emerald-500/20 text-emerald-500' : 'bg-zinc-800/50 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-400'
+        className={`w-10 h-9 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${
+          isDone ? 'bg-emerald-500/10 text-emerald-600' : 'bg-zinc-800 text-zinc-600 hover:bg-zinc-700 hover:text-zinc-400'
         }`}
       >
         <Check className="w-5 h-5" strokeWidth={isDone ? 3 : 2} />
