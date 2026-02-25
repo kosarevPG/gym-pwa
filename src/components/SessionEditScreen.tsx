@@ -751,6 +751,10 @@ function ExerciseBlock({
   const setGroupId = sets[0]?.set_group_id ?? '';
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
 
+  const bestKg = sets.length
+    ? Math.max(...sets.map((s) => (s.effective_load ?? s.input_wt ?? 0) || 0))
+    : 0;
+
   const handleDeleteLastSet = () => {
     if (sets.length === 0) return;
     const lastSet = sets[sets.length - 1];
@@ -761,18 +765,18 @@ function ExerciseBlock({
     return (
       <div
         onClick={() => setIsCollapsed(false)}
-        className="flex items-center justify-between px-4 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition-all"
+        className="flex items-center justify-between gap-3 px-4 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 transition-all"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
             <Check className="w-4 h-4 text-emerald-500" />
           </div>
-          <h3 className="font-semibold text-zinc-300">
+          <h3 className="font-semibold text-zinc-300 break-words">
             {nameRu}
             {nameEn && <span className="text-zinc-500 font-normal ml-1.5 text-sm">/ {nameEn}</span>}
           </h3>
         </div>
-        <div className="text-zinc-500 text-sm font-medium bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800">
+        <div className="text-zinc-500 text-sm font-medium bg-zinc-950 px-2 py-1 rounded-md border border-zinc-800 flex-shrink-0">
           {sets.length} подх.
         </div>
       </div>
@@ -781,14 +785,19 @@ function ExerciseBlock({
 
   return (
     <div className="space-y-3 bg-zinc-900/50 p-2 sm:p-3 rounded-3xl border border-zinc-800/50">
-      <div className="flex items-center justify-between px-2 pt-1">
-        <h3 className="font-bold text-lg text-zinc-100 pr-2 truncate">
-          {nameRu}
-          {nameEn && (
-            <span className="text-zinc-500 font-normal ml-2 text-sm">/ {nameEn}</span>
+      <div className="flex items-start justify-between gap-2 px-2 pt-1">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-bold text-lg text-zinc-100 break-words">
+            {nameRu}
+            {nameEn && (
+              <span className="text-zinc-500 font-normal ml-2 text-sm">/ {nameEn}</span>
+            )}
+          </h3>
+          {bestKg > 0 && (
+            <p className="text-xs text-zinc-500 mt-0.5">Лучший: {bestKg} кг</p>
           )}
-        </h3>
-        <div className="relative">
+        </div>
+        <div className="relative flex-shrink-0 pt-0.5">
           <button
             type="button"
             onClick={() => setMenuOpen(true)}
