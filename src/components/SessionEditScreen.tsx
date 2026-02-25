@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X, Flag, Pencil } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X, Flag, Pencil, History } from 'lucide-react';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -23,6 +23,8 @@ export interface SessionEditScreenProps {
   onAfterAddExercise?: (exercise: Exercise) => void;
   /** Переход к редактированию упражнения (название, категория и т.д.) */
   onEditExercise?: (exercise: Exercise) => void;
+  /** Переход к истории подходов по упражнению */
+  onOpenExerciseHistory?: (exercise: Exercise) => void;
 }
 
 function restSecToMin(restS: number): string {
@@ -93,6 +95,7 @@ export function SessionEditScreen({
   onAddExerciseOpenConsumed,
   onAfterAddExercise,
   onEditExercise,
+  onOpenExerciseHistory,
 }: SessionEditScreenProps) {
   const [rows, setRows] = useState<TrainingLogRaw[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -637,6 +640,7 @@ export function SessionEditScreen({
                       doneSets={doneSets}
                       onToggleSetDone={handleToggleSetDone}
                       onEditExercise={onEditExercise ? () => { const ex = exerciseMap.get(exId); if (ex) onEditExercise!(ex); } : undefined}
+                      onOpenHistory={onOpenExerciseHistory ? () => { const ex = exerciseMap.get(exId); if (ex) onOpenExerciseHistory!(ex); } : undefined}
                     />
                   );
                 })}
@@ -719,6 +723,7 @@ interface ExerciseBlockProps {
   doneSets: Set<string>;
   onToggleSetDone: (setId: string, restSec: number) => void;
   onEditExercise?: () => void;
+  onOpenHistory?: () => void;
 }
 
 function ExerciseBlock({
@@ -741,6 +746,7 @@ function ExerciseBlock({
   doneSets,
   onToggleSetDone,
   onEditExercise,
+  onOpenHistory,
 }: ExerciseBlockProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -809,6 +815,11 @@ function ExerciseBlock({
             <>
               <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl z-40 py-1 overflow-hidden">
+                {onOpenHistory && (
+                  <button type="button" onClick={() => { onOpenHistory(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800">
+                    <History className="w-4 h-4 text-zinc-500" /> История
+                  </button>
+                )}
                 {onEditExercise && (
                   <button type="button" onClick={() => { onEditExercise(); setMenuOpen(false); }} className="w-full text-left px-4 py-3 text-sm text-zinc-300 hover:bg-zinc-800 flex items-center gap-3 border-b border-zinc-800">
                     <Pencil className="w-4 h-4 text-zinc-500" /> Редактировать

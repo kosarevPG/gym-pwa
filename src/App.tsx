@@ -7,12 +7,13 @@ import { HomeScreenBento } from './components/HomeScreenBento';
 import { AnalyticsScreen } from './components/AnalyticsScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { SessionEditScreen } from './components/SessionEditScreen';
+import { ExerciseHistoryScreen } from './components/ExerciseHistoryScreen';
 import { WorkoutSummaryScreen } from './components/WorkoutSummaryScreen';
 import { getCategoryBySlug } from './data/categories';
 import { deleteExercise, getActiveWorkoutSession, createWorkoutSession } from './lib/api';
 import type { Category, Exercise } from './types';
 
-type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history' | 'session-edit' | 'summary';
+type Screen = 'home' | 'categories' | 'exercises' | 'exercise-detail' | 'add-exercise' | 'edit-exercise' | 'analytics' | 'history' | 'session-edit' | 'exercise-history' | 'summary';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -28,6 +29,8 @@ export default function App() {
   const [sessionEditFromWorkout, setSessionEditFromWorkout] = useState(false);
   /** true = зашли в «Текущая тренировка» с главной по кнопке «Продолжить» (назад — на главную). */
   const [sessionEditFromHome, setSessionEditFromHome] = useState(false);
+  /** С какого экрана открыли историю упражнения (назад вернёмся туда). */
+  const [historyFromScreen, setHistoryFromScreen] = useState<Screen | null>(null);
   const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
@@ -152,6 +155,10 @@ export default function App() {
         onEnsureSession={ensureWorkoutSession}
         onEditExercise={handleEditExercise}
         onDeleteExercise={handleDeleteExercise}
+        onOpenHistory={() => {
+          setHistoryFromScreen('exercise-detail');
+          setScreen('exercise-history');
+        }}
       />
     );
   }
@@ -221,6 +228,23 @@ export default function App() {
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
         onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
         onEditExercise={handleEditExercise}
+        onOpenExerciseHistory={(ex) => {
+          setSelectedExercise(ex);
+          setHistoryFromScreen('session-edit');
+          setScreen('exercise-history');
+        }}
+      />
+    );
+  }
+
+  if (screen === 'exercise-history' && selectedExercise) {
+    return (
+      <ExerciseHistoryScreen
+        exercise={selectedExercise}
+        onBack={() => {
+          setScreen(historyFromScreen ?? 'home');
+          setHistoryFromScreen(null);
+        }}
       />
     );
   }

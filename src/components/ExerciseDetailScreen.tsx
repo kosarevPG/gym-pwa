@@ -26,6 +26,8 @@ interface ExerciseDetailScreenProps {
   onEnsureSession?: () => Promise<string>;
   onEditExercise?: (exercise: ExerciseType) => void;
   onDeleteExercise?: (exercise: ExerciseType) => void;
+  /** Переход на экран истории подходов по упражнению (если не передан — открывается overlay). */
+  onOpenHistory?: () => void;
 }
 
 // Утилиты для расчетов
@@ -133,6 +135,7 @@ export function ExerciseDetailScreen({
   onEnsureSession,
   onEditExercise,
   onDeleteExercise,
+  onOpenHistory,
 }: ExerciseDetailScreenProps) {
   const [blocks, setBlocks] = useState<ExerciseBlock[]>(() => [
     { id: crypto.randomUUID(), exercise, sets: [createSetForExercise(exercise, 1)] },
@@ -763,11 +766,19 @@ export function ExerciseDetailScreen({
             </div>
 
             <button
-              onClick={() => { setHistoryOpen(true); setMenuOpen(false); }}
+              onClick={() => {
+                if (onOpenHistory) {
+                  onOpenHistory();
+                  setMenuOpen(false);
+                } else {
+                  setHistoryOpen(true);
+                  setMenuOpen(false);
+                }
+              }}
               className="w-full p-4 bg-zinc-800 rounded-xl flex items-center gap-3 hover:bg-zinc-700"
             >
               <History className="w-5 h-5 text-blue-400" />
-              <span className="font-medium">История подходов</span>
+              <span className="font-medium">История</span>
             </button>
 
             {onEditExercise && (
