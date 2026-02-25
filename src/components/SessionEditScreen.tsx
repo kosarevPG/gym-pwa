@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, Plus, Minus, Timer, Check, MoreHorizontal, ArrowUp, ArrowDown, Trash2, Unlink, Link2, Play, X } from 'lucide-react';
 import {
   fetchLogsBySessionId,
   fetchAllExercises,
@@ -99,7 +99,6 @@ export function SessionEditScreen({
   const [addExerciseOpen, setAddExerciseOpen] = useState(false);
   /** 'superset' = следующий выбранный упражнение добавится в суперсет с последним */
   const [addExerciseMode, setAddExerciseMode] = useState<'normal' | 'superset'>('normal');
-  const [collapsedExerciseIds, setCollapsedExerciseIds] = useState<Set<string>>(new Set());
   const didOpenAddExerciseOnMount = useRef(false);
 
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
@@ -416,7 +415,6 @@ export function SessionEditScreen({
     }
     setAddExerciseOpen(false);
     setAddExerciseMode('normal');
-    setCollapsedExerciseIds((prev) => new Set([...prev, ...orderedExIds]));
     loadSession(true);
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
@@ -470,7 +468,6 @@ export function SessionEditScreen({
     }
     setAddExerciseOpen(false);
     setAddExerciseMode('normal');
-    setCollapsedExerciseIds((prev) => new Set([...prev, ...orderedExIds]));
     loadSession(true);
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
@@ -612,33 +609,35 @@ export function SessionEditScreen({
                 <div className="absolute -left-1 top-2 bottom-2 w-0.5 bg-blue-500/50 rounded-full z-0" />
               )}
 
-              <div className={run.superset ? 'pl-4 space-y-6' : 'space-y-6'}>
-                {run.exIds.map((exId) => (
-                  <ExerciseBlock
-                    key={exId}
-                    exerciseId={exId}
-                    sets={byExercise.get(exId)!.sort((a, b) => a.set_no - b.set_no)}
-                    exerciseMap={exerciseMap}
-                    sessionId={sessionId}
-                    onUpdateSet={handleUpdateSet}
-                    onDeleteSet={handleDeleteSet}
-                    onAddSet={handleAddSet}
-                    onDeleteExercise={handleDeleteExercise}
-                    onMoveUp={() => handleMoveExerciseUp(exId)}
-                    onMoveDown={() => handleMoveExerciseDown(exId)}
-                    onSplitFromSuperset={run.superset ? () => handleSplitFromSuperset(exId) : undefined}
-                    onMergeWithNext={!run.superset && runIdx < runs.length - 1 ? () => handleMergeWithNext(runIdx) : undefined}
-                    canMoveUp={orderedExIds.indexOf(exId) > 0}
-                    canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
-                    doneSets={doneSets}
-                    onToggleSetDone={handleToggleSetDone}
-                    isCollapsed={collapsedExerciseIds.has(exId)}
-                    onFinishExercise={() => setCollapsedExerciseIds((prev) => new Set(prev).add(exId))}
-                    onExpand={() => setCollapsedExerciseIds((prev) => { const n = new Set(prev); n.delete(exId); return n; })}
-                    focusNewSetExerciseId={focusNewSetExerciseId}
-                    onClearFocusNewSet={() => setFocusNewSetExerciseId(null)}
-                  />
-                ))}
+              <div className={run.superset ? 'pl-4 space-y-8' : 'space-y-8'}>
+                {run.exIds.map((exId, idx) => {
+                  const isLastInRun = idx === run.exIds.length - 1;
+                  const hasNextRun = runIdx < runs.length - 1;
+                  const canMerge = isLastInRun && hasNextRun;
+                  return (
+                    <ExerciseBlock
+                      key={exId}
+                      exerciseId={exId}
+                      sets={byExercise.get(exId)!.sort((a, b) => a.set_no - b.set_no)}
+                      exerciseMap={exerciseMap}
+                      sessionId={sessionId}
+                      focusNewSetExerciseId={focusNewSetExerciseId}
+                      onClearFocusNewSet={() => setFocusNewSetExerciseId(null)}
+                      onUpdateSet={handleUpdateSet}
+                      onDeleteSet={handleDeleteSet}
+                      onAddSet={handleAddSet}
+                      onDeleteExercise={handleDeleteExercise}
+                      onMoveUp={() => handleMoveExerciseUp(exId)}
+                      onMoveDown={() => handleMoveExerciseDown(exId)}
+                      onSplitFromSuperset={run.superset ? () => handleSplitFromSuperset(exId) : undefined}
+                      onMergeWithNext={canMerge ? () => handleMergeWithNext(runIdx) : undefined}
+                      canMoveUp={orderedExIds.indexOf(exId) > 0}
+                      canMoveDown={orderedExIds.indexOf(exId) < orderedExIds.length - 1}
+                      doneSets={doneSets}
+                      onToggleSetDone={handleToggleSetDone}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))
@@ -720,6 +719,8 @@ interface ExerciseBlockProps {
   sets: TrainingLogRaw[];
   exerciseMap: Map<string, Exercise>;
   sessionId: string;
+  focusNewSetExerciseId: string | null;
+  onClearFocusNewSet: () => void;
   onUpdateSet: (id: string, patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
   onDeleteSet: (id: string) => void;
   onAddSet: (exerciseId: string, setGroupId: string, exerciseOrder: number) => void;
@@ -732,11 +733,6 @@ interface ExerciseBlockProps {
   canMoveDown: boolean;
   doneSets: Set<string>;
   onToggleSetDone: (setId: string, restSec: number) => void;
-  isCollapsed?: boolean;
-  onFinishExercise?: () => void;
-  onExpand?: () => void;
-  focusNewSetExerciseId: string | null;
-  onClearFocusNewSet: () => void;
 }
 
 function ExerciseBlock({
@@ -744,6 +740,8 @@ function ExerciseBlock({
   sets,
   exerciseMap,
   sessionId,
+  focusNewSetExerciseId,
+  onClearFocusNewSet,
   onUpdateSet,
   onDeleteSet,
   onAddSet,
@@ -756,136 +754,164 @@ function ExerciseBlock({
   canMoveDown,
   doneSets,
   onToggleSetDone,
-  isCollapsed = false,
-  onFinishExercise,
-  onExpand,
-  focusNewSetExerciseId,
-  onClearFocusNewSet,
 }: ExerciseBlockProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
   const ex = exerciseMap.get(exerciseId);
   const nameRu = ex?.nameRu ?? exerciseId;
   const nameEn = ex?.nameEn ?? '';
   const setGroupId = sets[0]?.set_group_id ?? '';
   const exerciseOrder = sets[0]?.exercise_order ?? 0;
 
-  const header = (
-    <div
-      className={`flex items-center justify-between px-1 py-2 border-b border-white/5 ${isCollapsed ? 'border-b-0 cursor-pointer hover:bg-white/[0.03]' : ''}`}
-      onClick={isCollapsed ? onExpand : undefined}
-      role={isCollapsed ? 'button' : undefined}
-    >
-      <div className="min-w-0 flex-1 pr-2">
-        <div className="font-bold text-base text-zinc-100 line-clamp-2 break-words leading-tight">{nameRu}</div>
-        {nameEn && <div className="text-zinc-500 text-sm line-clamp-1 break-words mt-0.5">{nameEn}</div>}
-      </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        {isCollapsed && onExpand && (
-          <span className="text-zinc-500 text-xs mr-1">Развернуть</span>
-        )}
-        {isCollapsed ? (
-          <ChevronDown className="w-5 h-5 text-zinc-400" />
-        ) : (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
-              className="p-1.5 -mr-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <MoreHorizontal className="w-5 h-5" />
-            </button>
+  const handleDeleteLastSet = () => {
+    if (sets.length === 0) return;
+    const lastSet = sets[sets.length - 1];
+    onDeleteSet(lastSet.id);
+  };
 
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1 w-56 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-40 py-1 overflow-hidden">
-                  {onFinishExercise && (
-                    <button onClick={() => { onFinishExercise(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Закончить упражнение
-                    </button>
-                  )}
-                  {canMoveUp && (
-                    <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3">
-                      <ArrowUp className="w-4 h-4 text-zinc-400" /> Переместить выше
-                    </button>
-                  )}
-                  {canMoveDown && (
-                    <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
-                      <ArrowDown className="w-4 h-4 text-zinc-400" /> Переместить ниже
-                    </button>
-                  )}
-                  {onSplitFromSuperset && (
-                    <button onClick={() => { onSplitFromSuperset(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
-                      <Unlink className="w-4 h-4 text-blue-400" /> Убрать из суперсета
-                    </button>
-                  )}
-                  {onMergeWithNext && (
-                    <button onClick={() => { onMergeWithNext(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
-                      <Link2 className="w-4 h-4 text-blue-400" /> В суперсет со след.
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      if (confirm('Удалить упражнение из тренировки?')) onDeleteExercise(exerciseId);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"
-                  >
-                    <Trash2 className="w-4 h-4" /> Удалить упражнение
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+  if (isCollapsed) {
+    return (
+      <div
+        onClick={() => setIsCollapsed(false)}
+        className="flex items-center justify-between px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl cursor-pointer hover:bg-emerald-500/20 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <Check className="w-5 h-5 text-emerald-500" />
+          <h3 className="font-semibold text-zinc-300">{nameRu}</h3>
+        </div>
+        <div className="text-zinc-500 text-sm font-medium">
+          {sets.length} подходов
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="space-y-1 pb-6 border-b border-white/5 last:border-b-0">
-      {header}
-      {!isCollapsed && (
-        <>
-          <div className="grid grid-cols-[20px_1fr_1fr_1fr_36px_32px] gap-2 px-2 py-1.5 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center">
-            <div>№</div>
-            <div>кг</div>
-            <div>повт</div>
-            <div>отд</div>
-            <div><Check className="w-3 h-3 mx-auto" /></div>
-            <div />
-          </div>
-
-          <div className="space-y-0.5">
-            {sets.map((row, index) => (
-              <SetRowEdit
-                key={row.id}
-                row={row}
-                setDisplayNo={index + 1}
-                isDone={doneSets.has(row.id)}
-                shouldFocus={focusNewSetExerciseId === exerciseId && index === sets.length - 1}
-                onClearFocus={onClearFocusNewSet}
-                onToggleDone={() => onToggleSetDone(row.id, row.rest_s)}
-                onUpdate={(patch) => onUpdateSet(row.id, patch)}
-                onDelete={() => onDeleteSet(row.id)}
-              />
-            ))}
-          </div>
-
+    <div className="space-y-3 pb-6 border-b border-white/5 last:border-b-0">
+      <div className="flex items-center justify-between px-1">
+        <div className="min-w-0 flex-1 pr-2">
+          <h3 className="font-bold text-base text-zinc-100 leading-tight">{nameRu}</h3>
+          {nameEn && <div className="text-zinc-500 text-sm truncate mt-0.5">{nameEn}</div>}
+        </div>
+        <div className="relative flex-shrink-0">
           <button
             type="button"
-            onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
-            className="w-full py-2 flex items-center justify-center gap-2 rounded-lg hover:bg-white/[0.04] text-blue-500/90 hover:text-blue-400 text-sm font-medium transition-colors mt-2"
+            onClick={() => setMenuOpen(true)}
+            className="p-1.5 -mr-1.5 rounded-lg text-zinc-500 hover:bg-white/10 hover:text-white transition-colors"
           >
-            <Plus className="w-4 h-4" /> Добавить подход
+            <MoreHorizontal className="w-5 h-5" />
           </button>
-        </>
-      )}
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-white/10 rounded-xl shadow-xl z-40 py-1 overflow-hidden">
+                {canMoveUp && (
+                  <button onClick={() => { onMoveUp(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3">
+                    <ArrowUp className="w-4 h-4 text-zinc-400" /> Выше
+                  </button>
+                )}
+                {canMoveDown && (
+                  <button onClick={() => { onMoveDown(); setMenuOpen(false); }} className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-white/10 flex items-center gap-3 border-b border-white/5">
+                    <ArrowDown className="w-4 h-4 text-zinc-400" /> Ниже
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    if (confirm('Удалить упражнение из тренировки?')) onDeleteExercise(exerciseId);
+                    setMenuOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-3"
+                >
+                  <Trash2 className="w-4 h-4" /> Удалить упражнение
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <div className="grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 px-2 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center">
+          <div>№</div>
+          <div>кг</div>
+          <div>повт</div>
+          <div>отд</div>
+          <div><Check className="w-3 h-3 mx-auto" /></div>
+        </div>
+
+        {sets.map((row, index) => (
+          <SetRow
+            key={row.id}
+            row={row}
+            setDisplayNo={index + 1}
+            isDone={doneSets.has(row.id)}
+            shouldFocus={focusNewSetExerciseId === exerciseId && index === sets.length - 1}
+            onClearFocus={onClearFocusNewSet}
+            onUpdate={(patch) => onUpdateSet(row.id, patch)}
+            onToggleDone={() => onToggleSetDone(row.id, row.rest_s)}
+          />
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 pt-2 px-1">
+        <button
+          type="button"
+          onClick={handleDeleteLastSet}
+          disabled={sets.length === 0}
+          className="w-[3.25rem] h-11 bg-zinc-900/50 text-red-400 hover:bg-red-500/20 border border-zinc-800/80 rounded-xl flex items-center justify-center transition-colors disabled:opacity-30"
+          title="Удалить последний подход"
+        >
+          <Minus className="w-5 h-5" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onAddSet(exerciseId, setGroupId, exerciseOrder)}
+          className="w-[3.25rem] h-11 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 rounded-xl flex items-center justify-center transition-colors"
+          title="Добавить подход"
+        >
+          <Plus className="w-5 h-5" />
+        </button>
+
+        {onSplitFromSuperset ? (
+          <button
+            type="button"
+            onClick={onSplitFromSuperset}
+            className="w-[3.25rem] h-11 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30 rounded-xl flex items-center justify-center transition-colors"
+            title="Убрать из суперсета"
+          >
+            <Unlink className="w-4 h-4" />
+          </button>
+        ) : onMergeWithNext ? (
+          <button
+            type="button"
+            onClick={onMergeWithNext}
+            className="w-[3.25rem] h-11 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800 hover:text-white border border-zinc-800/80 rounded-xl flex items-center justify-center transition-colors"
+            title="Объединить в суперсет со следующим"
+          >
+            <Link2 className="w-4 h-4" />
+          </button>
+        ) : (
+          <div className="w-[3.25rem] h-11 bg-zinc-900/20 text-zinc-600 border border-zinc-800/30 rounded-xl flex items-center justify-center pointer-events-none">
+            <Link2 className="w-4 h-4 opacity-50" />
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(true)}
+          className="flex-1 h-11 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl flex items-center justify-center gap-2 font-medium transition-colors"
+        >
+          <Check className="w-5 h-5" />
+          <span>Готово</span>
+        </button>
+      </div>
     </div>
   );
 }
 
-interface SetRowEditProps {
+interface SetRowProps {
   row: TrainingLogRaw;
   setDisplayNo: number;
   isDone: boolean;
@@ -893,10 +919,9 @@ interface SetRowEditProps {
   onClearFocus?: () => void;
   onToggleDone: () => void;
   onUpdate: (patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
-  onDelete: () => void;
 }
 
-function SetRowEdit({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggleDone, onUpdate, onDelete }: SetRowEditProps) {
+function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggleDone, onUpdate }: SetRowProps) {
   const [weight, setWeight] = useState(row.input_wt ? String(row.input_wt) : '');
   const [reps, setReps] = useState(row.reps ? String(row.reps) : '');
   const [rest, setRest] = useState(restSecToMin(row.rest_s ?? 0));
@@ -924,15 +949,13 @@ function SetRowEdit({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onTo
     }
   };
 
-  const selectAll = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
-
   const baseInput = 'w-full bg-transparent text-center outline-none text-base font-medium placeholder-zinc-600 transition-colors py-1.5';
   const activeText = 'text-white';
   const doneText = 'text-zinc-500';
 
   return (
-    <div className={`group grid grid-cols-[20px_1fr_1fr_1fr_36px_32px] gap-2 items-center px-2 py-1 rounded-lg transition-colors ${isDone ? 'bg-white/[0.03]' : ''}`}>
-      <div className={`text-[11px] text-center font-medium ${isDone ? 'text-zinc-600' : 'text-zinc-500'}`}>
+    <div className={`group grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 items-center px-2 py-1.5 rounded-xl transition-colors ${isDone ? 'bg-zinc-900/30' : ''}`}>
+      <div className={`text-xs text-center font-medium ${isDone ? 'text-zinc-600' : 'text-zinc-400'}`}>
         {setDisplayNo}
       </div>
 
@@ -944,11 +967,11 @@ function SetRowEdit({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onTo
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
           onBlur={flush}
-          onFocus={selectAll}
+          onFocus={(e) => e.target.select()}
           placeholder="—"
           className={`${baseInput} ${isDone ? doneText : activeText}`}
         />
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 group-hover:bg-white/15 transition-colors" />
+        <div className="absolute bottom-0 left-2 right-2 h-px bg-zinc-800 transition-colors" />
       </div>
 
       <div className="relative">
@@ -958,11 +981,11 @@ function SetRowEdit({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onTo
           value={reps}
           onChange={(e) => setReps(e.target.value)}
           onBlur={flush}
-          onFocus={selectAll}
+          onFocus={(e) => e.target.select()}
           placeholder="—"
           className={`${baseInput} ${isDone ? doneText : activeText}`}
         />
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 group-hover:bg-white/15 transition-colors" />
+        <div className="absolute bottom-0 left-2 right-2 h-px bg-zinc-800 transition-colors" />
       </div>
 
       <div className="relative">
@@ -972,31 +995,22 @@ function SetRowEdit({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onTo
           value={rest}
           onChange={(e) => setRest(e.target.value)}
           onBlur={flush}
-          onFocus={selectAll}
+          onFocus={(e) => e.target.select()}
           placeholder="—"
           className={`${baseInput} ${isDone ? doneText : activeText}`}
         />
         {rest && <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[9px] text-zinc-600 pointer-events-none">м</span>}
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-white/10 group-hover:bg-white/15 transition-colors" />
+        <div className="absolute bottom-0 left-2 right-2 h-px bg-zinc-800 transition-colors" />
       </div>
 
       <button
         type="button"
-        onClick={onToggleDone}
-        className={`w-9 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
-          isDone ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-zinc-500 hover:bg-white/10 hover:text-zinc-400'
+        onClick={() => onToggleDone()}
+        className={`w-10 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+          isDone ? 'bg-emerald-500/20 text-emerald-500' : 'bg-zinc-800/50 text-zinc-600 hover:bg-zinc-800 hover:text-zinc-400'
         }`}
       >
-        <Check className="w-4 h-4" strokeWidth={isDone ? 3 : 2} />
-      </button>
-
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-70 group-hover:opacity-100"
-        title="Удалить подход"
-      >
-        <Trash2 className="w-4 h-4" />
+        <Check className="w-5 h-5" strokeWidth={isDone ? 3 : 2} />
       </button>
     </div>
   );
