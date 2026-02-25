@@ -31,6 +31,8 @@ export default function App() {
   const [sessionEditFromHome, setSessionEditFromHome] = useState(false);
   /** С какого экрана открыли историю упражнения (назад вернёмся туда). */
   const [historyFromScreen, setHistoryFromScreen] = useState<Screen | null>(null);
+  /** Упражнение, которое нужно добавить в сессию при открытии экрана текущей тренировки (из меню Упражнения). */
+  const [exerciseToAddOnMount, setExerciseToAddOnMount] = useState<Exercise | null>(null);
   const [lastExerciseInSession, setLastExerciseInSession] = useState<{ exercise: Exercise; category: Category } | null>(null);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
@@ -66,12 +68,24 @@ export default function App() {
     setSelectedExercise(null);
   }, []);
 
-  const openExerciseDetail = useCallback((exercise: Exercise) => {
-    setSelectedExercise(exercise);
-    setScreen('exercise-detail');
-    const category = getCategoryBySlug(exercise.category) ?? selectedCategory ?? { slug: exercise.category, name: exercise.category };
-    setLastExerciseInSession({ exercise, category });
-  }, [selectedCategory]);
+  /** Выбор упражнения из списка: добавляем в текущую/новую сессию и открываем экран «Текущая тренировка» (новая карточка). */
+  const openExerciseDetail = useCallback(
+    async (exercise: Exercise) => {
+      try {
+        const sid = await ensureWorkoutSession();
+        setSessionId(sid);
+        setEditingSessionId(sid);
+        setExerciseToAddOnMount(exercise);
+        setSessionEditFromWorkout(true);
+        setSessionEditFromHome(false);
+        setOpenAddExerciseWhenSessionEdit(false);
+        setScreen('session-edit');
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Не удалось начать тренировку');
+      }
+    },
+    [ensureWorkoutSession]
+  );
 
   const openAddExercise = useCallback(() => {
     setScreen('add-exercise');
@@ -223,10 +237,13 @@ export default function App() {
           setOpenAddExerciseWhenSessionEdit(false);
           setSessionEditFromWorkout(false);
           setSessionEditFromHome(false);
+          setExerciseToAddOnMount(null);
           setScreen(fromHome ? 'home' : fromWorkout ? 'categories' : 'history');
         }}
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
         onAddExerciseOpenConsumed={() => setOpenAddExerciseWhenSessionEdit(false)}
+        exerciseToAddOnMount={exerciseToAddOnMount}
+        onExerciseAddedToSession={() => setExerciseToAddOnMount(null)}
         onEditExercise={handleEditExercise}
         onOpenExerciseHistory={(ex) => {
           setSelectedExercise(ex);

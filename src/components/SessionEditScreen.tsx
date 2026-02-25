@@ -25,6 +25,10 @@ export interface SessionEditScreenProps {
   onEditExercise?: (exercise: Exercise) => void;
   /** Переход к истории подходов по упражнению */
   onOpenExerciseHistory?: (exercise: Exercise) => void;
+  /** Упражнение, которое нужно добавить в сессию при первом открытии (из меню Упражнения). */
+  exerciseToAddOnMount?: Exercise | null;
+  /** Вызывается после добавления exerciseToAddOnMount в сессию. */
+  onExerciseAddedToSession?: () => void;
 }
 
 function restSecToMin(restS: number): string {
@@ -96,6 +100,8 @@ export function SessionEditScreen({
   onAfterAddExercise,
   onEditExercise,
   onOpenExerciseHistory,
+  exerciseToAddOnMount,
+  onExerciseAddedToSession,
 }: SessionEditScreenProps) {
   const [rows, setRows] = useState<TrainingLogRaw[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -106,6 +112,7 @@ export function SessionEditScreen({
   /** 'superset' = следующий выбранный упражнение добавится в суперсет с последним */
   const [addExerciseMode, setAddExerciseMode] = useState<'normal' | 'superset'>('normal');
   const didOpenAddExerciseOnMount = useRef(false);
+  const addedExerciseIdOnMountRef = useRef<string | null>(null);
 
   const [restEndAt, setRestEndAt] = useState<number | null>(null);
   const [restRemainingMs, setRestRemainingMs] = useState(0);
@@ -425,6 +432,20 @@ export function SessionEditScreen({
     const addedEx = exerciseMap.get(exerciseId);
     if (addedEx) onAfterAddExercise?.(addedEx);
   };
+
+  /** Добавить упражнение при открытии из меню Упражнения (exerciseToAddOnMount). */
+  useEffect(() => {
+    if (!exerciseToAddOnMount) {
+      addedExerciseIdOnMountRef.current = null;
+      return;
+    }
+    if (loading) return;
+    if (addedExerciseIdOnMountRef.current === exerciseToAddOnMount.id) return;
+    addedExerciseIdOnMountRef.current = exerciseToAddOnMount.id;
+    handleAddExercise(exerciseToAddOnMount.id).then(() => {
+      onExerciseAddedToSession?.();
+    });
+  }, [exerciseToAddOnMount, loading]);
 
   /** Добавить упражнение следующим в суперсет (после последнего в списке). */
   const handleAddExerciseToSuperset = async (exerciseId: string) => {
