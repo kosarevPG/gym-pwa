@@ -852,10 +852,11 @@ function ExerciseBlock({
           </div>
 
           <div className="px-2 pb-3 space-y-1.5">
-            {sets.map((row) => (
+            {sets.map((row, index) => (
               <SetRowEdit
                 key={row.id}
                 row={row}
+                setDisplayNo={index + 1}
                 isDone={doneSets.has(row.id)}
                 onToggleDone={() => onToggleSetDone(row.id, row.rest_s)}
                 onUpdate={(patch) => onUpdateSet(row.id, patch)}
@@ -879,13 +880,15 @@ function ExerciseBlock({
 
 interface SetRowEditProps {
   row: TrainingLogRaw;
+  /** Номер сета для отображения (1, 2, 3… без разрывов) */
+  setDisplayNo: number;
   isDone: boolean;
   onToggleDone: () => void;
   onUpdate: (patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
   onDelete: () => void;
 }
 
-function SetRowEdit({ row, isDone, onToggleDone, onUpdate, onDelete }: SetRowEditProps) {
+function SetRowEdit({ row, setDisplayNo, isDone, onToggleDone, onUpdate, onDelete }: SetRowEditProps) {
   const [weight, setWeight] = useState(row.input_wt ? String(row.input_wt) : '');
   const [reps, setReps] = useState(row.reps ? String(row.reps) : '');
   const [rest, setRest] = useState(restSecToMin(row.rest_s ?? 0));
@@ -952,7 +955,7 @@ function SetRowEdit({ row, isDone, onToggleDone, onUpdate, onDelete }: SetRowEdi
         onTouchEnd={handleTouchEnd}
       >
         <div className="text-center font-bold text-sm text-zinc-500">
-          {row.set_no}
+          {setDisplayNo}
         </div>
 
         <input
