@@ -53,7 +53,8 @@ function buildRuns(rows: TrainingLogRaw[]) {
       bySetNo.get(r.set_no)!.push(r);
     });
     bySetNo.forEach((setRows) => {
-      if (setRows.length > 1) setRows.forEach((r) => supersetExerciseIds.add(r.exercise_id));
+      const distinctExercises = new Set(setRows.map((r) => r.exercise_id));
+      if (distinctExercises.size > 1) setRows.forEach((r) => supersetExerciseIds.add(r.exercise_id));
     });
   });
 
@@ -281,7 +282,9 @@ export function SessionEditScreen({
   const handleAddSet = async (exerciseId: string, setGroupId: string, exerciseOrder: number) => {
     const sessionRows = rows.filter((r) => r.session_id === sessionId);
     const exerciseRows = sessionRows.filter((r) => r.exercise_id === exerciseId);
-    const maxSetNo = exerciseRows.length ? Math.max(...exerciseRows.map((r) => r.set_no)) + 1 : 1;
+    // order_index в БД — канонический порядок внутри группы; на фронте отображается как set_no. Должен быть уникален в рамках (set_group_id, exercise_id), иначе один подход окажется в одном «сете» с другим и упражнение покажется суперсетом с самим собой.
+    const maxOrderInGroup = exerciseRows.length ? Math.max(...exerciseRows.map((r) => r.set_no)) : 0;
+    const nextOrderIndex = maxOrderInGroup + 1;
     const firstTs = sessionRows[0]?.ts ?? new Date().toISOString();
 
     let defaultWeight = 0;
@@ -304,8 +307,8 @@ export function SessionEditScreen({
         exercise_id: exerciseId,
         weight: defaultEffective,
         reps: defaultReps,
-        order_index: maxSetNo - 1,
-        set_no: maxSetNo,
+        order_index: nextOrderIndex,
+        set_no: nextOrderIndex,
         exercise_order: exerciseOrder,
         input_wt: defaultWeight,
         effective_load: defaultEffective,
