@@ -925,26 +925,30 @@ function ExerciseBlock({
           </button>
         </div>
 
-        {(onMergeWithNext || onSplitFromSuperset) && (
-          <button
-            type="button"
-            onClick={() => {
-              if (onSplitFromSuperset) {
-                onSplitFromSuperset();
-              } else if (onMergeWithNext) {
-                onMergeWithNext();
-              }
-            }}
-            className={`h-12 w-12 rounded-xl border flex items-center justify-center transition-colors ${
-              onSplitFromSuperset
-                ? 'border-blue-500/60 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-                : 'border-zinc-700/50 bg-zinc-800 text-zinc-400 hover:border-blue-500/60 hover:text-blue-400'
-            }`}
-            title={onSplitFromSuperset ? 'Исключить из суперсета' : 'Добавить в суперсет'}
-          >
-            {onSplitFromSuperset ? <Unlink className="w-5 h-5" /> : <Link2 className="w-5 h-5" />}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (onSplitFromSuperset) onSplitFromSuperset();
+            else if (onMergeWithNext) onMergeWithNext();
+          }}
+          disabled={!onSplitFromSuperset && !onMergeWithNext}
+          className={`h-12 w-12 rounded-xl border flex items-center justify-center transition-colors shrink-0 ${
+            onSplitFromSuperset
+              ? 'border-blue-500/60 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+              : onMergeWithNext
+                ? 'border-zinc-700/50 bg-zinc-800 text-zinc-400 hover:border-blue-500/60 hover:text-blue-400'
+                : 'border-zinc-700/50 bg-zinc-800/80 text-zinc-600 cursor-default'
+          }`}
+          title={
+            onSplitFromSuperset
+              ? 'Исключить из суперсета'
+              : onMergeWithNext
+                ? 'Добавить в суперсет'
+                : 'Добавить в суперсет (добавьте следующее упражнение)'
+          }
+        >
+          {onSplitFromSuperset ? <Unlink className="w-5 h-5" /> : <Link2 className="w-5 h-5" />}
+        </button>
 
         <button
           type="button"
