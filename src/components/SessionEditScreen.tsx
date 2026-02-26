@@ -40,6 +40,10 @@ function parseRestMin(value: string): number {
   return Math.round(n * 60);
 }
 
+function formatKg(n: number): string {
+  return n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1);
+}
+
 function buildRuns(rows: TrainingLogRaw[]) {
   const supersetExerciseIds = new Set<string>();
   const bySetGroupId = new Map<string, TrainingLogRaw[]>();
@@ -781,6 +785,16 @@ function ExerciseBlock({
     ? Math.max(...sets.map((s) => (s.effective_load ?? s.input_wt ?? 0) || 0))
     : 0;
 
+  const maxE1RM = sets.length
+    ? Math.max(
+        ...sets.map((s) => {
+          const w = (s.effective_load ?? s.input_wt ?? 0) || 0;
+          const r = s.reps || 0;
+          return w > 0 && r > 0 ? Math.round(w * (1 + r / 30)) : 0;
+        }),
+      )
+    : 0;
+
   const handleDeleteLastSet = () => {
     if (sets.length === 0) return;
     const lastSet = sets[sets.length - 1];
@@ -819,8 +833,12 @@ function ExerciseBlock({
               <span className="text-zinc-500 font-normal ml-2 text-sm">/ {nameEn}</span>
             )}
           </h3>
-          {bestKg > 0 && (
-            <p className="text-xs text-zinc-500 mt-0.5">Лучший: {bestKg} кг</p>
+          {(bestKg > 0 || maxE1RM > 0) && (
+            <p className="text-xs text-zinc-500 mt-0.5 flex items-center gap-2">
+              {bestKg > 0 && <span className="text-zinc-400">Max: {formatKg(bestKg)} кг</span>}
+              {bestKg > 0 && maxE1RM > 0 && <span className="opacity-30">•</span>}
+              {maxE1RM > 0 && <span className="text-blue-400/80">1RM: {formatKg(maxE1RM)} кг</span>}
+            </p>
           )}
         </div>
         <div className="relative flex-shrink-0 pt-0.5">
@@ -893,6 +911,7 @@ function ExerciseBlock({
           <SetRow
             key={row.id}
             row={row}
+            exercise={ex}
             setDisplayNo={index + 1}
             isDone={doneSets.has(row.id)}
             shouldFocus={focusNewSetExerciseId === exerciseId && index === sets.length - 1}
@@ -967,6 +986,7 @@ function ExerciseBlock({
 
 interface SetRowProps {
   row: TrainingLogRaw;
+  exercise?: Exercise;
   setDisplayNo: number;
   isDone: boolean;
   shouldFocus?: boolean;
@@ -975,7 +995,7 @@ interface SetRowProps {
   onUpdate: (patch: { input_wt?: number; effective_load?: number; reps?: number; rest_seconds?: number }) => void;
 }
 
-function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggleDone, onUpdate }: SetRowProps) {
+function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggleDone, onUpdate }: SetRowProps) {
   const [weight, setWeight] = useState(row.input_wt ? String(row.input_wt) : '');
   const [reps, setReps] = useState(row.reps ? String(row.reps) : '');
   const [rest, setRest] = useState(restSecToMin(row.rest_s ?? 0));
@@ -1007,13 +1027,28 @@ function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggle
   const activeText = 'text-zinc-200';
   const doneText = 'text-zinc-600';
 
+  const inputWtNum = parseFloat(weight.replace(',', '.')) || 0;
+  const type = exercise?.weightType ?? 'standard';
+  const multiplier = exercise?.simultaneous ? 2 : 1;
+  const effectiveKg =
+    exercise != null && inputWtNum > 0
+      ? calcEffectiveLoadKg({
+          type,
+          inputWt: inputWtNum,
+          bodyWt: row.body_wt_snapshot ?? null,
+          baseWt: exercise.baseWeight ?? 0,
+          multiplier,
+        })
+      : inputWtNum;
+  const showEffective = inputWtNum > 0 && effectiveKg !== inputWtNum;
+
   return (
     <div className={`group grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 items-center px-2 py-2 rounded-xl transition-colors ${isDone ? 'bg-zinc-900/50' : 'bg-transparent'}`}>
       <div className={`text-xs text-center font-medium ${isDone ? 'text-zinc-700' : 'text-zinc-500'}`}>
         {setDisplayNo}
       </div>
 
-      <div className="relative">
+      <div className="relative flex flex-col justify-center h-full">
         <input
           ref={weightRef}
           type="number"
@@ -1023,8 +1058,13 @@ function SetRow({ row, setDisplayNo, isDone, shouldFocus, onClearFocus, onToggle
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
+          className={`${baseInput} ${showEffective ? 'pt-1 pb-4' : 'py-1.5'} ${isDone ? doneText : activeText}`}
         />
+        {showEffective && (
+          <div className="absolute bottom-1.5 left-0 right-0 text-center pointer-events-none">
+            <span className="text-[10px] font-medium text-emerald-500/80">= {formatKg(effectiveKg)}</span>
+          </div>
+        )}
         <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
       </div>
 
