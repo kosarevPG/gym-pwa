@@ -899,7 +899,7 @@ function ExerciseBlock({
       </div>
 
       <div className="space-y-1">
-        <div className="grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 px-2 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center pb-1">
+        <div className="grid grid-cols-[24px_1.2fr_1fr_1fr_40px] gap-3 px-2 text-[10px] uppercase tracking-wider text-zinc-500 font-medium text-center pb-1">
           <div>№</div>
           <div>кг</div>
           <div>повт</div>
@@ -999,6 +999,7 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
   const [weight, setWeight] = useState(row.input_wt ? String(row.input_wt) : '');
   const [reps, setReps] = useState(row.reps ? String(row.reps) : '');
   const [rest, setRest] = useState(restSecToMin(row.rest_s ?? 0));
+
   const weightRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1023,32 +1024,31 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
     }
   };
 
-  const baseInput = 'w-full bg-transparent text-center outline-none text-lg font-medium placeholder-zinc-700 transition-colors';
-  const activeText = 'text-zinc-200';
-  const doneText = 'text-zinc-600';
-
   const inputWtNum = parseFloat(weight.replace(',', '.')) || 0;
   const type = exercise?.weightType ?? 'standard';
   const multiplier = exercise?.simultaneous ? 2 : 1;
   const effectiveKg =
     exercise != null && inputWtNum > 0
-      ? calcEffectiveLoadKg({
-          type,
-          inputWt: inputWtNum,
-          bodyWt: row.body_wt_snapshot ?? null,
-          baseWt: exercise.baseWeight ?? 0,
-          multiplier,
-        })
+      ? calcEffectiveLoadKg({ type, inputWt: inputWtNum, bodyWt: row.body_wt_snapshot ?? null, baseWt: exercise.baseWeight ?? 0, multiplier })
       : inputWtNum;
+
   const showEffective = inputWtNum > 0 && effectiveKg !== inputWtNum;
 
-  return (
-    <div className={`group grid grid-cols-[24px_1fr_1fr_1fr_40px] gap-3 items-center px-2 py-2 rounded-xl transition-colors ${isDone ? 'bg-zinc-900/50' : 'bg-transparent'}`}>
-      <div className={`text-xs text-center font-medium ${isDone ? 'text-zinc-700' : 'text-zinc-500'}`}>
-        {setDisplayNo}
-      </div>
+  const baseInput = 'bg-transparent outline-none text-lg font-medium placeholder-zinc-700 transition-colors';
+  const activeColor = 'text-zinc-200';
+  const doneColor = 'text-zinc-600';
 
-      <div className="relative">
+  return (
+    <div
+      className={`relative group grid grid-cols-[24px_1.2fr_1fr_1fr_40px] gap-3 items-center px-2 py-2 rounded-xl transition-colors ${
+        isDone ? 'bg-zinc-900/50' : 'bg-transparent'
+      }`}
+    >
+      {/* Set Number */}
+      <div className={`text-xs text-center font-medium ${isDone ? 'text-zinc-700' : 'text-zinc-500'}`}>{setDisplayNo}</div>
+
+      {/* Weight */}
+      <div className="relative flex items-baseline justify-center w-full h-full py-1.5">
         <input
           ref={weightRef}
           type="number"
@@ -1058,17 +1058,24 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
+          className={`${baseInput} ${isDone ? doneColor : activeColor} ${
+            showEffective ? 'w-1/2 text-right pr-0.5' : 'w-full text-center'
+          }`}
         />
         {showEffective && (
-          <div className="absolute top-full left-0 right-0 mt-0.5 text-center pointer-events-none">
-            <span className="text-[10px] font-medium text-emerald-500/80">= {formatKg(effectiveKg)}</span>
+          <div className="w-1/2 text-left pl-0.5 pointer-events-none overflow-hidden">
+            <span className="text-[11px] font-bold text-emerald-500/80 whitespace-nowrap">={formatKg(effectiveKg)}</span>
           </div>
         )}
-        <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
+        <div
+          className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${
+            isDone ? 'bg-transparent' : 'bg-zinc-800'
+          }`}
+        />
       </div>
 
-      <div className="relative">
+      {/* Reps */}
+      <div className="relative flex items-center justify-center w-full h-full py-1.5">
         <input
           type="number"
           inputMode="numeric"
@@ -1077,12 +1084,17 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
+          className={`w-full text-center ${baseInput} ${isDone ? doneColor : activeColor}`}
         />
-        <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
+        <div
+          className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${
+            isDone ? 'bg-transparent' : 'bg-zinc-800'
+          }`}
+        />
       </div>
 
-      <div className="relative">
+      {/* Rest */}
+      <div className="relative flex items-center justify-center w-full h-full py-1.5">
         <input
           type="text"
           inputMode="decimal"
@@ -1091,12 +1103,19 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
+          className={`w-full text-center ${baseInput} ${isDone ? doneColor : activeColor}`}
         />
-        {rest && <span className={`absolute right-0 top-1.5 text-[9px] pointer-events-none ${isDone ? 'text-zinc-700' : 'text-zinc-600'}`}>м</span>}
-        <div className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${isDone ? 'bg-transparent' : 'bg-zinc-800'}`} />
+        {rest && (
+          <span className={`absolute right-0 top-2.5 text-[9px] ${isDone ? 'text-zinc-700' : 'text-zinc-600'}`}>м</span>
+        )}
+        <div
+          className={`absolute bottom-0 left-2 right-2 h-px transition-colors ${
+            isDone ? 'bg-transparent' : 'bg-zinc-800'
+          }`}
+        />
       </div>
 
+      {/* Checkbox */}
       <button
         type="button"
         onClick={() => onToggleDone()}
