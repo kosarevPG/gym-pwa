@@ -1048,7 +1048,7 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
         {setDisplayNo}
       </div>
 
-      <div className="relative flex flex-col justify-center h-full">
+      <div className="relative">
         <input
           ref={weightRef}
           type="number"
@@ -1058,7 +1058,7 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
           onBlur={flush}
           onFocus={(e) => e.target.select()}
           placeholder="—"
-          className={`${baseInput} ${showEffective ? 'pt-1 pb-4' : 'py-1.5'} ${isDone ? doneText : activeText}`}
+          className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
         />
         {showEffective && (
           <div className="absolute bottom-1.5 left-0 right-0 text-center pointer-events-none">
