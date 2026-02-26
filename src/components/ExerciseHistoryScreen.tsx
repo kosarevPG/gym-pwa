@@ -83,7 +83,7 @@ export function ExerciseHistoryScreen({ exercise, onBack }: ExerciseHistoryScree
                   <span>{dateStr}</span>
                 </div>
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-                  {(byDate.get(dateStr) ?? []).map((row) => {
+                  {[...(byDate.get(dateStr) ?? [])].reverse().map((row) => {
                     const kg = row.effectiveLoad ?? row.weight ?? 0;
                     const rest = formatRest(row.restSeconds);
                     return (
