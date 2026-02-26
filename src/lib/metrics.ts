@@ -72,9 +72,9 @@ export function calcEffectiveLoadKg(params: {
   if (type === 'dumbbell') return inputWt * multiplier + baseWt;
   if (type === 'machine') return inputWt + baseWt;
   if (type === 'bodyweight') return bodyWt + inputWt + baseWt;
+  if (type === 'assisted') return Math.max(0, bodyWt - (inputWt + baseWt));
   if (type === 'standard') return inputWt + baseWt;
-  // assisted: (вес тела) − (противовес). Без дефолта bodyWt старые записи давали бы 0.
-  return Math.max(0, bodyWt - (inputWt + baseWt));
+  return inputWt + baseWt;
 }
 
 export function calcSetVolumeKg(params: {

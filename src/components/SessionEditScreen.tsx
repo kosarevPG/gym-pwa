@@ -235,7 +235,10 @@ export function SessionEditScreen({
     const ex = row ? exerciseMap.get(row.exercise_id) : null;
     const inputWt = patch.input_wt ?? row?.input_wt ?? 0;
     const repsNum = patch.reps ?? row?.reps ?? 0;
-    const type = ex?.weightType ?? 'standard';
+    const type =
+      ex?.weightType === 'bodyweight' && ex?.bodyweightType === 'ASSISTED'
+        ? 'assisted'
+        : (ex?.weightType ?? 'standard');
     const multiplier = ex?.simultaneous ? 2 : 1;
     const effective =
       patch.effective_load !== undefined
@@ -1025,7 +1028,10 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
   };
 
   const inputWtNum = parseFloat(weight.replace(',', '.')) || 0;
-  const type = exercise?.weightType ?? 'standard';
+  const type =
+    exercise?.weightType === 'bodyweight' && exercise?.bodyweightType === 'ASSISTED'
+      ? 'assisted'
+      : (exercise?.weightType ?? 'standard');
   const multiplier = exercise?.simultaneous ? 2 : 1;
   const effectiveKg =
     exercise != null && inputWtNum > 0

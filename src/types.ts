@@ -2,7 +2,7 @@ export type CategorySlug = 'back' | 'legs' | 'chest' | 'shoulders' | 'triceps' |
 export type BodyPart = 'CHEST' | 'BACK' | 'LEGS' | 'SHOULDERS' | 'TRICEPS' | 'BICEPS' | 'ABS' | 'CARDIO' | 'FULL_BODY' | 'OTHER';
 export type InputMode = 'WEIGHT_REPS' | 'DISTANCE_TIME' | 'TIME_ONLY' | 'REPS_ONLY';
 export type BodyweightType = 'NONE' | 'WEIGHTED' | 'ASSISTED';
-export type ExerciseWeightType = 'barbell' | 'dumbbell' | 'machine' | 'bodyweight' | 'standard';
+export type ExerciseWeightType = 'barbell' | 'dumbbell' | 'machine' | 'bodyweight' | 'assisted' | 'standard';
 export type SetSide = 'left' | 'right' | 'both';
 
 export interface Category {

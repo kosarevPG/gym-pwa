@@ -36,7 +36,8 @@ function formatWeekLabel(weekKey: string): string {
 
 function getTypeFromExercise(exercise: Exercise): TrainingMetricRow['type'] {
   const t = exercise.weightType ?? 'standard';
-  if (t === 'barbell' || t === 'dumbbell' || t === 'machine' || t === 'bodyweight') return t;
+  if (t === 'bodyweight' && exercise.bodyweightType === 'ASSISTED') return 'assisted';
+  if (t === 'barbell' || t === 'dumbbell' || t === 'machine' || t === 'bodyweight' || t === 'assisted') return t;
   return 'standard';
 }
 
@@ -82,7 +83,7 @@ export function buildTrainingMetricRows(logs: TrainingLogRaw[], exercises: Exerc
         type,
         baseWt: ex.baseWeight ?? 0,
         multiplier: getMultiplierFromExercise(ex),
-        allow1rm: type !== 'bodyweight',
+        allow1rm: type !== 'bodyweight' && type !== 'assisted',
         group: ex.category,
         effectiveLoad: effective,
         sideMult,
