@@ -79,11 +79,13 @@ function buildRuns(rows: TrainingLogRaw[]) {
   let current: { superset: boolean; exIds: string[] } | null = null;
   for (const exId of exerciseOrder) {
     const isSuperset = supersetExerciseIds.has(exId);
-    if (current && current.superset === isSuperset) {
-      current.exIds.push(exId);
-    } else {
+    // Нормальный режим: каждое обычное упражнение — отдельный ран.
+    // Для суперсета группируем подряд идущие упражнения.
+    if (!current || current.superset !== isSuperset || !isSuperset) {
       current = { superset: isSuperset, exIds: [exId] };
       runs.push(current);
+    } else {
+      current.exIds.push(exId);
     }
   }
   return { runs, byExercise };
