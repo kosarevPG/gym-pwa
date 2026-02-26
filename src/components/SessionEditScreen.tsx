@@ -1061,7 +1061,7 @@ function SetRow({ row, exercise, setDisplayNo, isDone, shouldFocus, onClearFocus
           className={`${baseInput} py-1.5 ${isDone ? doneText : activeText}`}
         />
         {showEffective && (
-          <div className="absolute bottom-1.5 left-0 right-0 text-center pointer-events-none">
+          <div className="absolute top-full left-0 right-0 mt-0.5 text-center pointer-events-none">
             <span className="text-[10px] font-medium text-emerald-500/80">= {formatKg(effectiveKg)}</span>
           </div>
         )}
