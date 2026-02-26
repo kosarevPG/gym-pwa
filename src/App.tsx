@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { CategoriesScreen } from './components/CategoriesScreen';
-import { ExerciseListScreen } from './components/ExerciseListScreen';
 import { ExerciseDetailScreen } from './components/ExerciseDetailScreen';
 import { AddExerciseScreen } from './components/AddExerciseScreen';
 import { HomeScreenBento } from './components/HomeScreenBento';
@@ -47,12 +46,6 @@ export default function App() {
     setSelectedExercise(null);
   }, []);
 
-  const openExercises = useCallback((category: Category) => {
-    setSelectedCategory(category);
-    setScreen('exercises');
-    setSelectedExercise(null);
-  }, []);
-
   /** Вернуть текущую активную сессию или создать новую (авто-старт тренировки из меню Упражнения). */
   const ensureWorkoutSession = useCallback(async (): Promise<string> => {
     const active = await getActiveWorkoutSession();
@@ -85,7 +78,8 @@ export default function App() {
   }, []);
 
   const onExerciseAdded = useCallback(() => {
-    setScreen('exercises');
+    setScreen('categories');
+    setSelectedCategory(null);
     setExercisesRefreshTrigger((t) => t + 1);
   }, []);
 
@@ -97,7 +91,7 @@ export default function App() {
   const handleEditSuccess = useCallback((updated: Exercise) => {
     setSelectedExercise(updated);
     setExercisesRefreshTrigger((t) => t + 1);
-    setScreen('exercises');
+    setScreen('categories');
   }, []);
 
   const handleDeleteExercise = useCallback(async (exercise: Exercise) => {
@@ -106,29 +100,24 @@ export default function App() {
       alert(error.message);
       return;
     }
-    setScreen('exercises');
+    setScreen('categories');
     setSelectedExercise(null);
     setExercisesRefreshTrigger((t) => t + 1);
   }, []);
 
-  const handleCategorySelect = useCallback(
-    (category: Category) => {
-      if (addFromCategoriesMode) {
-        setSelectedCategory(category);
-        setScreen('add-exercise');
-        setAddFromCategoriesMode(false);
-      } else {
-        openExercises(category);
-      }
-    },
-    [addFromCategoriesMode, openExercises]
-  );
+  const handleCategorySelect = useCallback((category: Category) => {
+    if (addFromCategoriesMode) {
+      setSelectedCategory(category);
+      setScreen('add-exercise');
+      setAddFromCategoriesMode(false);
+    }
+  }, [addFromCategoriesMode]);
 
   if (screen === 'add-exercise' && selectedCategory) {
     return (
       <AddExerciseScreen
         category={selectedCategory}
-        onBack={() => setScreen('exercises')}
+        onBack={() => { setScreen('categories'); setSelectedCategory(null); }}
         onSuccess={onExerciseAdded}
       />
     );
@@ -139,7 +128,7 @@ export default function App() {
       <ExerciseDetailScreen
         exercise={selectedExercise}
         sessionId={sessionId}
-        onBack={() => setScreen('exercises')}
+        onBack={() => setScreen('categories')}
         onComplete={() => {
           setEditingSessionId(sessionId);
           setEditingSessionDate(undefined);
@@ -168,18 +157,6 @@ export default function App() {
         initialExercise={selectedExercise}
         onBack={() => setScreen('exercise-detail')}
         onSuccess={handleEditSuccess}
-      />
-    );
-  }
-
-  if (screen === 'exercises' && selectedCategory) {
-    return (
-      <ExerciseListScreen
-        category={selectedCategory}
-        refreshTrigger={exercisesRefreshTrigger}
-        onBack={openCategories}
-        onSelectExercise={openExerciseDetail}
-        onAddExercise={openAddExercise}
       />
     );
   }
@@ -278,6 +255,7 @@ export default function App() {
 
   return (
     <CategoriesScreen
+      key={exercisesRefreshTrigger}
       addMode={addFromCategoriesMode}
       onBack={() => {
         setScreen('home');
