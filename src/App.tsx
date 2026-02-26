@@ -28,6 +28,8 @@ export default function App() {
   const [historyFromScreen, setHistoryFromScreen] = useState<Screen | null>(null);
   /** Упражнение, которое нужно добавить в сессию при открытии экрана текущей тренировки (из меню Упражнения). */
   const [exerciseToAddOnMount, setExerciseToAddOnMount] = useState<Exercise | null>(null);
+  /** Открыли экран «Упражнения» из текущей тренировки для выбора упражнения (та же форма, Back — в тренировку). */
+  const [pickingExerciseForSession, setPickingExerciseForSession] = useState(false);
 
   const [sessionId, setSessionId] = useState<string>(() => `session_${Date.now()}`);
 
@@ -189,6 +191,7 @@ export default function App() {
           setEditingSessionDate(undefined);
           setOpenAddExerciseWhenSessionEdit(false);
           setExerciseToAddOnMount(null);
+          setPickingExerciseForSession(false);
           setScreen('home');
         }}
         openAddExerciseOnMount={openAddExerciseWhenSessionEdit}
@@ -200,6 +203,10 @@ export default function App() {
           setSelectedExercise(ex);
           setHistoryFromScreen('session-edit');
           setScreen('exercise-history');
+        }}
+        onOpenExercisePicker={() => {
+          setPickingExerciseForSession(true);
+          setScreen('categories');
         }}
       />
     );
@@ -255,15 +262,28 @@ export default function App() {
 
   return (
     <CategoriesScreen
-      key={exercisesRefreshTrigger}
+      key={pickingExerciseForSession ? `pick-${exercisesRefreshTrigger}` : exercisesRefreshTrigger}
       addMode={addFromCategoriesMode}
       onBack={() => {
-        setScreen('home');
-        setAddFromCategoriesMode(false);
+        if (pickingExerciseForSession) {
+          setScreen('session-edit');
+          setPickingExerciseForSession(false);
+        } else {
+          setScreen('home');
+          setAddFromCategoriesMode(false);
+        }
       }}
       onSelectCategory={handleCategorySelect}
-      onSelectExercise={openExerciseDetail}
-      onAddExercise={() => setAddFromCategoriesMode(true)}
+      onSelectExercise={
+        pickingExerciseForSession
+          ? (ex) => {
+              setExerciseToAddOnMount(ex);
+              setScreen('session-edit');
+              setPickingExerciseForSession(false);
+            }
+          : openExerciseDetail
+      }
+      onAddExercise={pickingExerciseForSession ? undefined : () => setAddFromCategoriesMode(true)}
     />
   );
 }

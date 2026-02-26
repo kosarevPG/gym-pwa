@@ -25,6 +25,8 @@ export interface SessionEditScreenProps {
   onOpenExerciseHistory?: (exercise: Exercise) => void;
   exerciseToAddOnMount?: Exercise | null;
   onExerciseAddedToSession?: () => void;
+  /** Открыть экран «Упражнения» (категории/поиск/сетка) для выбора упражнения вместо модального списка. */
+  onOpenExercisePicker?: () => void;
 }
 
 function restSecToMin(restS: number): string {
@@ -99,6 +101,7 @@ export function SessionEditScreen({
   onOpenExerciseHistory,
   exerciseToAddOnMount,
   onExerciseAddedToSession,
+  onOpenExercisePicker,
 }: SessionEditScreenProps) {
   const [rows, setRows] = useState<TrainingLogRaw[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -658,7 +661,15 @@ export function SessionEditScreen({
         <div className="flex gap-3 pb-20 pt-4">
           <button
             type="button"
-            onClick={() => { setAddExerciseMode('normal'); setAddExerciseOpen(true); }}
+            onClick={() => {
+              if (onOpenExercisePicker) {
+                setAddExerciseMode('normal');
+                onOpenExercisePicker();
+              } else {
+                setAddExerciseMode('normal');
+                setAddExerciseOpen(true);
+              }
+            }}
             className="flex-1 py-4 rounded-2xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:text-white font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Plus className="w-5 h-5" />
